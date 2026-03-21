@@ -22,7 +22,17 @@ async def create_user(
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this username already exists in the system.",
+            detail="The user with this email already exists in the system.",
         )
     user = await crud_user.create(db, obj_in=user_in)
     return user
+
+
+@router.get("/me", response_model=User)
+async def read_user_me(
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Get current user profile (Requires Authentication).
+    """
+    return current_user

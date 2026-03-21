@@ -2,3 +2,5 @@
 # imported by Alembic
 from app.db.base_class import Base  # noqa
 from app.models.user import User  # noqa
+from app.models.chat import Chat, ChatParticipant  # noqa
+from app.models.message import Message  # noqa
