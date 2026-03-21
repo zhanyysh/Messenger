@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Chat Tester</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        #chat { height: 300px; border: 1px solid #ccc; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        .msg { padding: 5px; margin: 5px 0; border-radius: 4px; background: #e1f5fe; }
+        .system { color: #888; font-style: italic; }
+        input { padding: 8px; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        button { padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>Backend WebSocket Tester</h2>
+    
+    <label>Your JWT Token (From Swagger UI):</label>
+    <input type="text" id="token" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+    
+    <label>Chat ID:</label>
+    <input type="number" id="chatId" placeholder="1" value="1">
+    
+    <button onclick="connect()">Connect to Chat!</button>
+    <hr>
+
+    <div id="chat"></div>
+    
+    <form onsubmit="sendMessage(event)">
+        <input type="text" id="messageText" autocomplete="off" placeholder="Type a message..." disabled/>
+        <button type="submit" id="sendBtn" disabled>Send</button>
+    </form>
+
+    <script>
+        let ws = null;
+
+        function connect() {
+            const token = document.getElementById("token").value;
+            const chatId = document.getElementById("chatId").value;
+            if(!token || !chatId) { alert("Please enter both Token and Chat ID!"); return; }
+
+            const wsUrl = `ws://127.0.0.1:8000/ws/chat/${chatId}?token=${token}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                document.getElementById("messageText").disabled = false;
+                document.getElementById("sendBtn").disabled = false;
+                appendMsg("System", "Connected to Chat Room #" + chatId, "system");
+            };
+
+            ws.onmessage = function(event) {
+                // We broadcasted as JSON: {"content": "hello", "sender_name": "...", "timestamp": "..."}
+                const data = JSON.parse(event.data);
+                appendMsg(data.sender_name, data.content, "msg");
+            };
+
+            ws.onclose = function() {
+                appendMsg("System", "Connection Closed (Check if token is valid)", "system");
+            };
+        }
+
+        function sendMessage(event) {
+            event.preventDefault();
+            const input = document.getElementById("messageText");
+            if(ws && input.value) {
+                ws.send(input.value);  // Send plain text as designed in `websockets.py`
+                input.value = '';
+            }
+        }
+
+        function appendMsg(sender, text, className) {
+            const chat = document.getElementById("chat");
+            const div = document.createElement("div");
+            div.className = className;
+            div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+    </script>
+</body>
+</html>

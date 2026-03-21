@@ -12,11 +12,11 @@
     - [x] Configure `.env` for Local PostgreSQL Connection
     - [x] Set up basic folder structure
 
-- [ ] **2. Database & Auth (Backend)**
-    - [ ] Define `User` model (SQLAlchemy/Tortoise)
-    - [ ] Implement Registration endpoint (POST /auth/register)
-    - [ ] Implement Login endpoint (POST /auth/login) -> JWT
-    - [ ] Implement `get_current_user` dependency
+- [x] **2. Database & Auth (Backend)**
+    - [x] Define `User` model (SQLAlchemy/Tortoise)
+    - [x] Implement Registration endpoint (POST /auth/register)
+    - [x] Implement Login endpoint (POST /auth/login) -> JWT
+    - [x] Implement `get_current_user` dependency
 
 - [ ] **3. Auth (Frontend)**
     - [ ] Create Login Page
@@ -24,7 +24,7 @@
     - [ ] Implement Auth Context (store token)
     - [ ] Protected Route wrapper
 
-- [ ] **4. Messaging Core (Backend)**
+- [x] **4. Messaging Core (Backend)**
     - [ ] Define `Chat` and `Message` models
     - [ ] Implement WebSocket endpoint (`/ws/chat/{chat_id}`)
     - [ ] Implement `POST /api/chats` (create chat)
