@@ -1,7 +1,7 @@
 from typing import AsyncGenerator
 
 from app.core.config import settings
-from app.crud.crud_user import get_by_email
+from app.crud import crud_user
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.schemas.token import TokenPayload
@@ -36,7 +36,10 @@ async def get_current_user(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user = await get_by_email(db, email=token_data.sub)
+    user = await crud_user.get_by_email(db, email=token_data.sub)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    await crud_user.touch_last_seen(db, user)
+
     return user

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2 } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -349,11 +349,20 @@ export default function ChatDashboard() {
           <div className="p-6 border-b border-border/50 flex justify-between items-center bg-black/20">
             <div>
               <h1 className="text-2xl font-display font-bold text-gradient tracking-tighter">GLSMSG</h1>
-              <p className="text-[10px] text-textMuted uppercase tracking-widest mt-1">Node: {user?.full_name || user?.email}</p>
+              <p className="text-[10px] text-textMuted uppercase tracking-widest mt-1">Node: {user?.username || user?.full_name || user?.email}</p>
             </div>
-            <button onClick={handleLogout} className="text-textMuted hover:text-secondary transition-colors" title="Disconnect">
-              <LogOut className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/profile')}
+                className="text-textMuted hover:text-primary transition-colors"
+                title="Profile"
+              >
+                <UserRoundCog className="w-5 h-5" />
+              </button>
+              <button onClick={handleLogout} className="text-textMuted hover:text-secondary transition-colors" title="Disconnect">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <div className="p-4 border-b border-border/50">

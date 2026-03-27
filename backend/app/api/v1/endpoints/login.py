@@ -22,10 +22,18 @@ async def login_access_token(
     OAuth2 compatible token login, get an access token for future requests
     """
     user = await crud_user.get_by_email(db, email=form_data.username)
+    if not user:
+        user = await crud_user.get_by_username(db, username=form_data.username)
+
     if not user or not security.verify_password(
         form_data.password, user.hashed_password
     ):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        raise HTTPException(
+            status_code=400, detail="Incorrect email/username or password"
+        )
+
+    await crud_user.touch_last_seen(db, user)
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": security.create_access_token(

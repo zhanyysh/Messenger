@@ -5,7 +5,7 @@ import { LogIn, Mail, Lock, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function Login() {
 
     try {
       const formData = new URLSearchParams();
-      formData.append('username', email);
+      formData.append('username', identifier);
       formData.append('password', password);
 
       const response = await fetch('http://127.0.0.1:8000/api/v1/login/access-token', {
@@ -42,7 +42,7 @@ export default function Login() {
       login(data.access_token, userData);
       navigate('/');
     } catch {
-      setError('Invalid email or password');
+      setError('Invalid email/username or password');
     } finally {
       setLoading(false);
     }
@@ -86,16 +86,16 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Identifier (Email)</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Identifier (Email or Username)</label>
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
-                type="email" 
+                type="text" 
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
-                placeholder="operative@network.local"
+                placeholder="operative@network.local or agent_zero"
               />
             </div>
           </div>

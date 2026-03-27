@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/useAuthStore';
 
 export default function Register() {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +24,13 @@ export default function Register() {
       const regRes = await fetch('http://127.0.0.1:8000/api/v1/users/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name: name, is_superuser: false }),
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: name,
+          username: username.trim() || null,
+          is_superuser: false,
+        }),
       });
 
       if (!regRes.ok) {
@@ -125,6 +132,20 @@ export default function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
                 placeholder="operative@network.local"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Username (Optional)</label>
+            <div className="relative group">
+              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
+              <input 
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
+                placeholder="agent_zero"
               />
             </div>
           </div>
