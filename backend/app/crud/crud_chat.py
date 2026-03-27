@@ -73,3 +73,44 @@ async def add_chat_member(
     await db.commit()
     await db.refresh(db_obj)
     return db_obj
+
+
+async def get_participant(
+    db: AsyncSession, chat_id: int, user_id: int
+) -> Optional[ChatParticipant]:
+    stmt = select(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def remove_participant(db: AsyncSession, chat_id: int, user_id: int) -> bool:
+    stmt = select(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    participant = result.scalars().first()
+
+    if participant:
+        await db.delete(participant)
+        await db.commit()
+        return True
+    return False
+
+
+async def update_participant_role(
+    db: AsyncSession, chat_id: int, user_id: int, new_role: ParticipantRole
+) -> Optional[ChatParticipant]:
+    stmt = select(ChatParticipant).filter(
+        ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    participant = result.scalars().first()
+
+    if participant:
+        participant.role = new_role
+        await db.commit()
+        await db.refresh(participant)
+        return participant
+    return None

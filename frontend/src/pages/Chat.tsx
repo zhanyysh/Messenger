@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -62,6 +62,7 @@ export default function ChatDashboard() {
   const [newMessage, setNewMessage] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -325,6 +326,94 @@ export default function ChatDashboard() {
     navigate('/login');
   };
 
+  const handleRemoveMember = async (userId: number) => {
+    if (!activeChat || !token) return;
+    if (!confirm("Remove this operative from the node?")) return;
+
+    try {
+      const res = await authFetch(
+        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/members/${userId}`,
+        { method: 'DELETE' }
+      );
+      if (!res) return;
+
+      if (res.ok) {
+        const updatedChat = {
+          ...activeChat,
+          participants: activeChat.participants.filter(p => p.user_id !== userId)
+        };
+        setActiveChat(updatedChat);
+        setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+        alert("Operative removed.");
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to remove operative.");
+      }
+    } catch {
+      alert("Network failure during removal.");
+    }
+  };
+
+  const handleUpdateRole = async (userId: number, newRole: string) => {
+    if (!activeChat || !token) return;
+
+    try {
+      const res = await authFetch(
+        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/members/${userId}/role`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: newRole })
+        }
+      );
+      if (!res) return;
+
+      if (res.ok) {
+        const updatedParticipant = await res.json();
+        const updatedChat = {
+          ...activeChat,
+          participants: activeChat.participants.map(p =>
+            p.user_id === userId ? updatedParticipant : p
+          )
+        };
+        setActiveChat(updatedChat);
+        setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+        const action = newRole === 'admin' ? 'promoted to' : 'demoted to';
+        alert(`Operative ${action} ${newRole}.`);
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to update operative role.");
+      }
+    } catch {
+      alert("Network failure during role update.");
+    }
+  };
+
+  const handleLeaveChat = async () => {
+    if (!activeChat || !token) return;
+    if (!confirm("Leave this secure node?")) return;
+
+    try {
+      const res = await authFetch(
+        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/me`,
+        { method: 'DELETE' }
+      );
+      if (!res) return;
+
+      if (res.ok) {
+        setChats(prev => prev.filter(c => c.id !== activeChat.id));
+        setActiveChat(null);
+        setMessages([]);
+        alert("You have left the secure node.");
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Failed to leave chat.");
+      }
+    } catch {
+      alert("Network failure during leave operation.");
+    }
+  };
+
   // Helper to get chat name (If private, show other person's name)
   const getChatName = (chat: Chat) => {
     if (chat.type === 'group' && chat.name) return chat.name;
@@ -432,110 +521,164 @@ export default function ChatDashboard() {
                 </div>
 
                 {/* Group Admin Actions */}
-                {activeChat.type === 'group' && activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
-                  <button 
-                    onClick={handleAddMember}
-                    className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span>Add Operative</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  {activeChat.type === 'group' && (
+                    <>
+                      <button
+                        onClick={() => setShowParticipantsPanel(prev => !prev)}
+                        className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>{showParticipantsPanel ? 'Hide Operatives' : 'Show Operatives'}</span>
+                      </button>
+                      {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
+                        <button 
+                          onClick={handleAddMember}
+                          className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>Add Operative</span>
+                        </button>
+                      )}
+                      {activeChat.type === 'group' && (
+                        <button 
+                          onClick={handleLeaveChat}
+                          className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-secondary/50 hover:bg-secondary/5 rounded-xl text-xs text-textMuted hover:text-secondary transition-all"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Leave</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
-                {loadingHistory ? (
-                  <div className="flex h-full items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  </div>
-                ) : (
-                  messages.map((msg, idx) => {
-                    const isMe = msg.sender_id === user?.id;
-                    return (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        key={idx} 
-                        className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}
-                      >
-                        <div className={cn(
-                          "max-w-[75%] lg:max-w-[50%] p-4 rounded-2xl relative shadow-lg overflow-hidden",
-                          isMe 
-                            ? "bg-primary text-black rounded-tr-sm" 
-                            : "bg-surface border border-border text-white rounded-tl-sm backdrop-blur-md"
-                        )}>
-                          {!isMe && <div className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">{msg.sender_name}</div>}
-                          
-                          {/* Rich Media Rendering */}
-                          {msg.type === 'text' && <p className="leading-relaxed font-sans text-[15px]">{msg.content}</p>}
-                          
-                          {msg.type === 'image' && (
-                            <img 
-                              src={`http://127.0.0.1:8000${msg.content}`} 
-                              alt="Uploaded content" 
-                              className="rounded-lg max-w-full h-auto border border-black/10 cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => window.open(`http://127.0.0.1:8000${msg.content}`, '_blank')}
-                            />
-                          )}
-
-                          {msg.type === 'file' && (
-                            <a 
-                              href={`http://127.0.0.1:8000${msg.content}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
+              {/* Messages Area and Participants */}
+              <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0 overflow-hidden">
+                {/* Messages Column */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  {/* Messages List */}
+                  <div className="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6 min-h-0">
+                    {loadingHistory ? (
+                      <div className="flex h-full items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      </div>
+                    ) : (
+                      messages.map((msg, idx) => {
+                        const isMe = msg.sender_id === user?.id;
+                        return (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            key={idx}
+                            className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}
+                          >
+                            <div
                               className={cn(
-                                "flex items-center gap-3 p-3 rounded-xl border transition-all",
-                                isMe ? "bg-black/10 border-black/10 hover:bg-black/20" : "bg-white/5 border-border hover:bg-white/10"
+                                "max-w-[75%] lg:max-w-[50%] p-4 rounded-2xl relative shadow-lg overflow-hidden",
+                                isMe
+                                  ? "bg-primary text-black rounded-tr-sm"
+                                  : "bg-surface border border-border text-white rounded-tl-sm backdrop-blur-md"
                               )}
                             >
-                              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", isMe ? "bg-black/20" : "bg-primary/20")}>
-                                <FileIcon className={cn("w-5 h-5", isMe ? "text-black" : "text-primary")} />
-                              </div>
-                              <div className="overflow-hidden">
-                                <p className="text-xs font-bold truncate">File Attachment</p>
-                                <p className="text-[10px] opacity-60">Click to Download</p>
-                              </div>
-                            </a>
-                          )}
+                              {!isMe && (
+                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">
+                                  {msg.sender_name}
+                                </div>
+                              )}
 
-                          {msg.type === 'voice' && (
-                            <div className="flex items-center gap-3 min-w-[200px]">
-                              <button 
-                                onClick={() => {
-                                  const audio = new Audio(`http://127.0.0.1:8000${msg.content}`);
-                                  audio.play();
-                                }}
-                                className={cn("w-10 h-10 rounded-full flex items-center justify-center transition-all", isMe ? "bg-black/20 hover:bg-black/30" : "bg-primary/20 hover:bg-primary/30")}
-                              >
-                                <Play className={cn("w-4 h-4 fill-current", isMe ? "text-black" : "text-primary")} />
-                              </button>
-                              <div className="flex-1 h-1.5 bg-black/10 rounded-full overflow-hidden">
-                                <motion.div 
-                                  initial={{ width: 0 }}
-                                  animate={{ width: '100%' }}
-                                  transition={{ duration: 2, repeat: Infinity }}
-                                  className={cn("h-full", isMe ? "bg-black/40" : "bg-primary/60")}
+                              {/* Rich Media Rendering */}
+                              {msg.type === 'text' && (
+                                <p className="leading-relaxed font-sans text-[15px]">{msg.content}</p>
+                              )}
+
+                              {msg.type === 'image' && (
+                                <img
+                                  src={`http://127.0.0.1:8000${msg.content}`}
+                                  alt="Uploaded content"
+                                  className="rounded-lg max-w-full h-auto border border-black/10 cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() =>
+                                    window.open(`http://127.0.0.1:8000${msg.content}`, '_blank')
+                                  }
                                 />
+                              )}
+
+                              {msg.type === 'file' && (
+                                <a
+                                  href={`http://127.0.0.1:8000${msg.content}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={cn(
+                                    "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                    isMe
+                                      ? "bg-black/10 border-black/10 hover:bg-black/20"
+                                      : "bg-white/5 border-border hover:bg-white/10"
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      "w-10 h-10 rounded-lg flex items-center justify-center",
+                                      isMe ? "bg-black/20" : "bg-primary/20"
+                                    )}
+                                  >
+                                    <FileIcon className={cn("w-5 h-5", isMe ? "text-black" : "text-primary")} />
+                                  </div>
+                                  <div className="overflow-hidden">
+                                    <p className="text-xs font-bold truncate">File Attachment</p>
+                                    <p className="text-[10px] opacity-60">Click to Download</p>
+                                  </div>
+                                </a>
+                              )}
+
+                              {msg.type === 'voice' && (
+                                <div className="flex items-center gap-3 min-w-[200px]">
+                                  <button
+                                    onClick={() => {
+                                      const audio = new Audio(`http://127.0.0.1:8000${msg.content}`);
+                                      audio.play();
+                                    }}
+                                    className={cn(
+                                      "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                                      isMe ? "bg-black/20 hover:bg-black/30" : "bg-primary/20 hover:bg-primary/30"
+                                    )}
+                                  >
+                                    <Play className={cn("w-4 h-4 fill-current", isMe ? "text-black" : "text-primary")} />
+                                  </button>
+                                  <div className="flex-1 h-1.5 bg-black/10 rounded-full overflow-hidden">
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: '100%' }}
+                                      transition={{ duration: 2, repeat: Infinity }}
+                                      className={cn("h-full", isMe ? "bg-black/40" : "bg-primary/60")}
+                                    />
+                                  </div>
+                                  <Music className="w-3 h-3 opacity-40" />
+                                </div>
+                              )}
+
+                              <div
+                                className={cn(
+                                  "text-[9px] mt-2 opacity-50",
+                                  isMe ? "text-right text-black/70" : "text-left"
+                                )}
+                              >
+                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
                               </div>
-                              <Music className="w-3 h-3 opacity-40" />
                             </div>
-                          )}
+                          </motion.div>
+                        );
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
 
-                          <div className={cn("text-[9px] mt-2 opacity-50", isMe ? "text-right text-black/70" : "text-left")}>
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Message Input */}
-              <div className="p-6 bg-[#0a0a0c]/60 backdrop-blur-xl border-t border-border/50">
-                <form onSubmit={handleSend} className="relative flex items-center max-w-4xl mx-auto gap-4">
+                  {/* Message Input */}
+                  <div className="p-6 bg-[#0a0a0c]/60 backdrop-blur-xl border-t border-border/50">
+                    <form onSubmit={handleSend} className="relative flex items-center max-w-4xl mx-auto gap-4">
                   
                   {/* Media Upload Buttons */}
                   <div className="flex items-center gap-2">
@@ -631,8 +774,94 @@ export default function ChatDashboard() {
                       </>
                     )}
                   </div>
-                </form>
-              </div>
+                    </form>
+                  </div>
+                </div>
+
+              {/* Participants Panel */}
+              {activeChat.type === 'group' && showParticipantsPanel && (
+                <div className="w-full md:w-72 border-l border-border/50 bg-[#0a0a0c]/40 backdrop-blur-xl flex flex-col max-h-96 md:max-h-full overflow-hidden">
+                  <div className="p-4 border-b border-border/50 sticky top-0 bg-black/20">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <Users className="w-4 h-4 text-primary" />
+                      <span>Operatives ({activeChat.participants.length})</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                    <AnimatePresence>
+                      {activeChat.participants.map((participant) => {
+                        const isMe = participant.user_id === user?.id;
+                        const isAdmin = participant.role === 'admin';
+                        const iAmAdmin = activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin';
+                        
+                        return (
+                          <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            key={participant.user_id}
+                            className="p-3 rounded-lg bg-surface hover:bg-white/5 border border-border/20 transition-all"
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                                  {isAdmin ? (
+                                    <Crown className="w-4 h-4 text-primary" />
+                                  ) : (
+                                    <UserIcon className="w-4 h-4 text-textMuted" />
+                                  )}
+                                </div>
+                                <div className="overflow-hidden flex-1">
+                                  <p className="text-xs font-semibold text-white truncate">
+                                    {participant.user.full_name || participant.user.email}
+                                  </p>
+                                  {isMe && <p className="text-[10px] text-primary">You</p>}
+                                  {isAdmin && !isMe && <p className="text-[10px] text-secondary">Admin</p>}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Action Buttons (Admin only, not for self) */}
+                            {iAmAdmin && !isMe && (
+                              <div className="flex gap-2 pt-2 border-t border-border/20">
+                                {!isAdmin ? (
+                                  <button
+                                    onClick={() => handleUpdateRole(participant.user_id, 'admin')}
+                                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded text-[10px] text-primary transition-all"
+                                    title="Promote to admin"
+                                  >
+                                    <Star className="w-3 h-3" />
+                                    <span>Promote</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleUpdateRole(participant.user_id, 'member')}
+                                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-textMuted/10 hover:bg-textMuted/20 border border-textMuted/30 rounded text-[10px] text-textMuted transition-all"
+                                    title="Demote to member"
+                                  >
+                                    <UserIcon className="w-3 h-3" />
+                                    <span>Demote</span>
+                                  </button>
+                                )}
+                                
+                                <button
+                                  onClick={() => handleRemoveMember(participant.user_id)}
+                                  className="flex items-center justify-center px-2 py-1.5 bg-secondary/10 hover:bg-secondary/20 border border-secondary/30 rounded text-[10px] text-secondary transition-all"
+                                  title="Remove from chat"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              )}
+            </div>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center p-8 relative">

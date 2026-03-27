@@ -15,6 +15,10 @@ class ChatParticipantCreate(ChatParticipantBase):
     pass
 
 
+class ChatParticipantUpdate(BaseModel):
+    role: ParticipantRole
+
+
 class ChatParticipantResponse(ChatParticipantBase):
     joined_at: datetime
     user: User

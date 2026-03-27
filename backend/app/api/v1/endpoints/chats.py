@@ -8,6 +8,7 @@ from app.schemas.chat import (
     ChatCreate,
     ChatParticipantCreate,
     ChatParticipantResponse,
+    ChatParticipantUpdate,
     ChatResponse,
 )
 from app.schemas.message import MessageResponse
@@ -109,3 +110,131 @@ async def add_chat_member(
     )
     result = await db.execute(stmt)
     return result.scalars().first()
+
+
+@router.delete("/{chat_id}/members/{user_id}")
+async def remove_chat_member(
+    chat_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Remove a member from a chat. Only Admins can remove members.
+    Cannot remove the last admin.
+    """
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Check if current user is an admin of this chat
+    is_admin = any(
+        p.user_id == current_user.id and p.role == ParticipantRole.ADMIN
+        for p in chat.participants
+    )
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # Check if user exists in chat
+    if not any(p.user_id == user_id for p in chat.participants):
+        raise HTTPException(status_code=404, detail="User not in this chat")
+
+    # Prevent removing the last admin
+    admin_count = sum(1 for p in chat.participants if p.role == ParticipantRole.ADMIN)
+    if admin_count == 1 and user_id == current_user.id:
+        raise HTTPException(
+            status_code=400, detail="Cannot remove the last admin from chat"
+        )
+
+    await crud_chat.remove_participant(db, chat_id=chat_id, user_id=user_id)
+    return {"status": "member removed"}
+
+
+@router.put("/{chat_id}/members/{user_id}/role", response_model=ChatParticipantResponse)
+async def update_member_role(
+    chat_id: int,
+    user_id: int,
+    role_in: ChatParticipantUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Update a member's role (promote/demote). Only Admins can update roles.
+    """
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Check if current user is an admin of this chat
+    is_admin = any(
+        p.user_id == current_user.id and p.role == ParticipantRole.ADMIN
+        for p in chat.participants
+    )
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # Check if user exists in chat
+    if not any(p.user_id == user_id for p in chat.participants):
+        raise HTTPException(status_code=404, detail="User not in this chat")
+
+    # Prevent demoting the last admin
+    if (
+        role_in.role == ParticipantRole.MEMBER
+        and user_id == current_user.id
+        and sum(1 for p in chat.participants if p.role == ParticipantRole.ADMIN) == 1
+    ):
+        raise HTTPException(
+            status_code=400, detail="Cannot demote the last admin from chat"
+        )
+
+    member = await crud_chat.update_participant_role(
+        db, chat_id=chat_id, user_id=user_id, new_role=role_in.role
+    )
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Failed to update member role")
+
+    # Reload member with user info for response
+    from sqlalchemy.future import select
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(ChatParticipant)
+        .options(selectinload(ChatParticipant.user))
+        .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user_id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+@router.delete("/{chat_id}/me")
+async def leave_chat(
+    chat_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Leave a chat group. Cannot leave if you're the last admin.
+    """
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Check if user is in the chat
+    if not any(p.user_id == current_user.id for p in chat.participants):
+        raise HTTPException(status_code=404, detail="Not a participant of this chat")
+
+    # Prevent last admin from leaving
+    is_admin = any(
+        p.user_id == current_user.id and p.role == ParticipantRole.ADMIN
+        for p in chat.participants
+    )
+    admin_count = sum(1 for p in chat.participants if p.role == ParticipantRole.ADMIN)
+
+    if is_admin and admin_count == 1:
+        raise HTTPException(
+            status_code=400, detail="Cannot leave: you are the last admin in this chat"
+        )
+
+    await crud_chat.remove_participant(db, chat_id=chat_id, user_id=current_user.id)
+    return {"status": "left chat"}
