@@ -1,17 +1,15 @@
 from typing import AsyncGenerator
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.config import settings
 from app.crud.crud_user import get_by_email
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.schemas.token import TokenPayload
-
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"

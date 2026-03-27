@@ -1,15 +1,19 @@
-from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Optional
+
 from app.models.message import MessageType
 from app.schemas.user import User
+from pydantic import BaseModel
+
 
 class MessageBase(BaseModel):
     content: Optional[str] = None
     type: MessageType = MessageType.TEXT
 
+
 class MessageCreate(MessageBase):
     pass
+
 
 class MessageResponse(MessageBase):
     id: int

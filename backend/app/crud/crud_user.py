@@ -1,12 +1,11 @@
-from typing import Optional, List
-from sqlalchemy import or_
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from typing import List, Optional
 
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserCreate
+from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 
 async def get_by_email(db: AsyncSession, email: str) -> Optional[User]:

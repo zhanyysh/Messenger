@@ -1,13 +1,13 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api import deps
 from app.crud import crud_user
 from app.schemas.user import User, UserCreate
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
+
 
 @router.get("/search", response_model=List[User])
 async def search_users(

@@ -1,11 +1,12 @@
 from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
 
 from app.models.chat import Chat, ChatParticipant, ChatType, ParticipantRole
 from app.models.user import User
 from app.schemas.chat import ChatCreate
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+
 
 async def create_chat(db: AsyncSession, obj_in: ChatCreate, current_user: User) -> Chat:
     db_chat = Chat(type=obj_in.type, name=obj_in.name)
@@ -38,6 +39,7 @@ async def create_chat(db: AsyncSession, obj_in: ChatCreate, current_user: User) 
     result = await db.execute(stmt)
     return result.scalars().first()
 
+
 async def get_user_chats(db: AsyncSession, user_id: int) -> List[Chat]:
     stmt = (
         select(Chat)
@@ -61,7 +63,10 @@ async def get_chat(db: AsyncSession, chat_id: int) -> Optional[Chat]:
 
 
 async def add_chat_member(
-    db: AsyncSession, chat_id: int, user_id: int, role: ParticipantRole = ParticipantRole.MEMBER
+    db: AsyncSession,
+    chat_id: int,
+    user_id: int,
+    role: ParticipantRole = ParticipantRole.MEMBER,
 ) -> ChatParticipant:
     db_obj = ChatParticipant(chat_id=chat_id, user_id=user_id, role=role)
     db.add(db_obj)

@@ -13,7 +13,22 @@ interface User {
 interface CreateChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onChatCreated: (chat: any) => void;
+  onChatCreated: (chat: Chat) => void;
+}
+
+interface ChatParticipant {
+  user_id: number;
+  role: string;
+  joined_at: string;
+  user: User;
+}
+
+interface Chat {
+  id: number;
+  type: 'private' | 'group';
+  name: string | null;
+  created_at: string;
+  participants: ChatParticipant[];
 }
 
 export default function CreateChatModal({ isOpen, onClose, onChatCreated }: CreateChatModalProps) {
@@ -66,7 +81,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
         const data = await res.json();
         setError(data.detail || "Failed to establish line");
       }
-    } catch (err) {
+    } catch {
       setError("Network failure. Connection lost.");
     } finally {
       setLoading(false);

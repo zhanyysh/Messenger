@@ -1,6 +1,5 @@
+from app.api.v1.endpoints import chats, login, uploads, users
 from fastapi import APIRouter
-
-from app.api.v1.endpoints import login, users, chats, uploads
 
 api_router = APIRouter()
 api_router.include_router(login.router, tags=["login"])

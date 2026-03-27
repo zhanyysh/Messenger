@@ -1,14 +1,18 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api import deps
 from app.crud import crud_chat, crud_message
+from app.models.chat import ChatParticipant, ParticipantRole
 from app.models.user import User
-from app.schemas.chat import ChatCreate, ChatResponse, ChatParticipantCreate, ChatParticipantResponse
-from app.models.chat import ParticipantRole, ChatParticipant
+from app.schemas.chat import (
+    ChatCreate,
+    ChatParticipantCreate,
+    ChatParticipantResponse,
+    ChatResponse,
+)
 from app.schemas.message import MessageResponse
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -54,11 +58,13 @@ async def read_chat_messages(
     chat = await crud_chat.get_chat(db, chat_id=chat_id)
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    
+
     if not any(p.user_id == current_user.id for p in chat.participants):
         raise HTTPException(status_code=403, detail="Not a participant of this chat")
 
-    messages = await crud_message.get_chat_messages(db=db, chat_id=chat_id, skip=skip, limit=limit)
+    messages = await crud_message.get_chat_messages(
+        db=db, chat_id=chat_id, skip=skip, limit=limit
+    )
     return messages
 
 
@@ -91,10 +97,11 @@ async def add_chat_member(
     member = await crud_chat.add_chat_member(
         db, chat_id=chat_id, user_id=member_in.user_id, role=member_in.role
     )
-    
+
     # Reload member with user info for response
-    from sqlalchemy.orm import selectinload
     from sqlalchemy.future import select
+    from sqlalchemy.orm import selectinload
+
     stmt = (
         select(ChatParticipant)
         .options(selectinload(ChatParticipant.user))

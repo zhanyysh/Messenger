@@ -1,15 +1,15 @@
 import json
 from typing import Dict, List
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.api import deps
 from app.crud import crud_message
-from app.schemas.message import MessageCreate
 from app.models.message import MessageType
+from app.schemas.message import MessageCreate
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
+
 
 class ConnectionManager:
     def __init__(self):
@@ -33,28 +33,29 @@ class ConnectionManager:
             for connection in self.active_connections[chat_id]:
                 await connection.send_text(message)
 
+
 manager = ConnectionManager()
+
 
 @router.websocket("/{chat_id}")
 async def websocket_endpoint(
-    websocket: WebSocket, 
-    chat_id: int,
-    db: AsyncSession = Depends(deps.get_db)
+    websocket: WebSocket, chat_id: int, db: AsyncSession = Depends(deps.get_db)
 ):
     # Authenticate via query parameter
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=1008)
         return
-    
+
     try:
         user = await deps.get_current_user(token=token, db=db)
     except Exception as e:
         await websocket.accept()  # Accept before sending
-        await websocket.send_text(json.dumps({
-            "sender_name": "System", 
-            "content": f"Auth failed! Details: {repr(e)}"
-        }))
+        await websocket.send_text(
+            json.dumps(
+                {"sender_name": "System", "content": f"Auth failed! Details: {repr(e)}"}
+            )
+        )
         await websocket.close(code=1008)
         return
 
@@ -71,13 +72,13 @@ async def websocket_endpoint(
                 # Fallback to plain text if not JSON
                 content = data
                 msg_type = MessageType.TEXT
-            
+
             # Save message to DB
             msg_in = MessageCreate(content=content, type=msg_type)
             saved_msg = await crud_message.create_message(
                 db=db, obj_in=msg_in, chat_id=chat_id, sender_id=user.id
             )
-            
+
             # Broadcast to all users in room
             payload = {
                 "id": saved_msg.id,
@@ -86,9 +87,9 @@ async def websocket_endpoint(
                 "type": saved_msg.type,
                 "sender_id": user.id,
                 "sender_name": user.full_name or user.email,
-                "timestamp": saved_msg.timestamp.isoformat()
+                "timestamp": saved_msg.timestamp.isoformat(),
             }
             await manager.broadcast(json.dumps(payload), chat_id)
-            
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, chat_id)

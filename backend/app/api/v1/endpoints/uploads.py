@@ -1,19 +1,20 @@
 import os
-import uuid
 import shutil
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.api import deps
+from app.core.config import settings
 from app.models.user import User
 from app.schemas.media import MediaResponse
-from app.core.config import settings
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 router = APIRouter()
 
 UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
+
 
 @router.post("/", response_model=MediaResponse)
 async def upload_file(
@@ -37,9 +38,7 @@ async def upload_file(
     # In a real app, this would be a full URL
     # For local dev, we'll return the path that our StaticFiles mount serves
     url = f"/uploads/{unique_filename}"
-    
+
     return MediaResponse(
-        url=url,
-        filename=file.filename,
-        content_type=file.content_type
+        url=url, filename=file.filename, content_type=file.content_type
     )

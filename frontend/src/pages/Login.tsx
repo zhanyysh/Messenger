@@ -41,7 +41,7 @@ export default function Login() {
 
       login(data.access_token, userData);
       navigate('/');
-    } catch (err) {
+    } catch {
       setError('Invalid email or password');
     } finally {
       setLoading(false);

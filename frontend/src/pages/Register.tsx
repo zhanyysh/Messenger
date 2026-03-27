@@ -52,8 +52,12 @@ export default function Register() {
 
       login(data.access_token, userData);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Registration failed');
+      }
     } finally {
       setLoading(false);
     }

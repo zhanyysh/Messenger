@@ -34,6 +34,24 @@ interface Message {
   timestamp: string;
 }
 
+interface HistoryMessageApi {
+  id: number;
+  content: string;
+  type: 'text' | 'image' | 'file' | 'voice';
+  sender_id: number;
+  timestamp: string;
+  sender?: {
+    email: string;
+    full_name: string | null;
+  };
+}
+
+interface SearchUser {
+  id: number;
+  email: string;
+  full_name: string | null;
+}
+
 export default function ChatDashboard() {
   const { token, user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -42,7 +60,6 @@ export default function ChatDashboard() {
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [ws, setWs] = useState<WebSocket | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -52,7 +69,8 @@ export default function ChatDashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const timerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const handleUnauthorized = React.useCallback(() => {
     logout();
@@ -88,7 +106,10 @@ export default function ChatDashboard() {
 
       const data = await res.json();
       setChats(data);
-      if (data.length > 0) setActiveChat(data[0]);
+      if (data.length > 0) {
+        setLoadingHistory(true);
+        setActiveChat(data[0]);
+      }
     };
 
     loadChats();
@@ -98,7 +119,6 @@ export default function ChatDashboard() {
   useEffect(() => {
     if (!activeChat) return;
 
-    setLoadingHistory(true);
     const loadMessages = async () => {
       const res = await authFetch(`http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/messages`);
       if (!res) {
@@ -106,10 +126,11 @@ export default function ChatDashboard() {
         return;
       }
 
-      const data = await res.json();
+      const data: HistoryMessageApi[] = await res.json();
       // Map API history data layout to strictly match our standardized Message format
-      const history = data.map((d: any) => ({
+      const history: Message[] = data.map((d) => ({
         id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
+        type: d.type,
         sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
       }));
       setMessages(history);
@@ -119,7 +140,7 @@ export default function ChatDashboard() {
     loadMessages();
 
     // Close existing socket if any
-    if (ws) ws.close();
+    if (wsRef.current) wsRef.current.close();
 
     if (!token) {
       handleUnauthorized();
@@ -133,9 +154,12 @@ export default function ChatDashboard() {
       setMessages(prev => [...prev, msg]);
     };
 
-    setWs(socket);
+    wsRef.current = socket;
 
-    return () => socket.close();
+    return () => {
+      socket.close();
+      wsRef.current = null;
+    };
   }, [activeChat, token, authFetch, handleUnauthorized]);
 
   // Auto-scroll
@@ -145,14 +169,15 @@ export default function ChatDashboard() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (ws && newMessage.trim()) {
-      ws.send(newMessage);
+    if (wsRef.current && newMessage.trim()) {
+      wsRef.current.send(newMessage);
       setNewMessage('');
     }
   };
 
   const handleChatCreated = (newChat: Chat) => {
     setChats([newChat, ...chats]);
+    setLoadingHistory(true);
     setActiveChat(newChat);
   };
 
@@ -166,8 +191,8 @@ export default function ChatDashboard() {
     try {
       const searchRes = await authFetch(`http://127.0.0.1:8000/api/v1/users/search?query=${encodeURIComponent(email)}`);
       if (!searchRes) return;
-      const users = await searchRes.json();
-      const targetUser = users.find((u: any) => u.email === email);
+      const users: SearchUser[] = await searchRes.json();
+      const targetUser = users.find((u) => u.email === email);
       
       if (!targetUser) {
         alert("Operative not found in registry.");
@@ -199,14 +224,14 @@ export default function ChatDashboard() {
         const err = await res.json();
         alert(err.detail || "Access denied or synchronization failed.");
       }
-    } catch (err) {
+    } catch {
       alert("Network failure during synchronization.");
     }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !ws) return;
+    if (!file || !wsRef.current) return;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -221,7 +246,7 @@ export default function ChatDashboard() {
       if (res.ok) {
         const data = await res.json();
         const type = file.type.startsWith('image/') ? 'image' : 'file';
-        ws.send(JSON.stringify({
+        wsRef.current.send(JSON.stringify({
           content: data.url,
           type: type
         }));
@@ -261,12 +286,15 @@ export default function ChatDashboard() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      clearInterval(timerRef.current);
+      if (timerRef.current !== null) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
   };
 
   const submitVoice = async () => {
-    if (!audioBlob || !ws) return;
+    if (!audioBlob || !wsRef.current) return;
 
     const formData = new FormData();
     formData.append('file', audioBlob, 'voice.webm');
@@ -280,7 +308,7 @@ export default function ChatDashboard() {
       
       if (res.ok) {
         const data = await res.json();
-        ws.send(JSON.stringify({
+        wsRef.current.send(JSON.stringify({
           content: data.url,
           type: 'voice'
         }));
@@ -348,7 +376,10 @@ export default function ChatDashboard() {
                   <motion.div 
                     initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
                     key={chat.id} 
-                    onClick={() => setActiveChat(chat)}
+                    onClick={() => {
+                      setLoadingHistory(true);
+                      setActiveChat(chat);
+                    }}
                     className={cn(
                       "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border",
                       isActive 
