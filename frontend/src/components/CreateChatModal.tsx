@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Users, MessageSquare, Shield, Loader2, Info } from 'lucide-react';
 import UserSearch from './UserSearch';
 import { useAuthStore } from '../store/useAuthStore';
-import { cn } from '../lib/utils';
+import { cn } from '../lib/utils.ts';
 
 interface User {
   id: number;
