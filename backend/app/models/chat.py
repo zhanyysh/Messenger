@@ -48,6 +48,9 @@ class ChatParticipant(Base):
     joined_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
+    last_read_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     chat = relationship("Chat", back_populates="participants")
     user = relationship("User")

@@ -39,6 +39,7 @@ class ChatCreate(ChatBase):
 class ChatResponse(ChatBase):
     id: int
     created_at: datetime
+    unread_count: int = 0
     participants: List[ChatParticipantResponse] = []
 
     class Config:

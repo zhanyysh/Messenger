@@ -41,6 +41,13 @@ async def read_chats(
     Retrieve all chats the current user is a part of.
     """
     chats = await crud_chat.get_user_chats(db=db, user_id=current_user.id)
+
+    for chat in chats:
+        unread_count = await crud_chat.get_unread_count(
+            db=db, chat_id=chat.id, user_id=current_user.id
+        )
+        setattr(chat, "unread_count", unread_count)
+
     return chats
 
 
@@ -62,6 +69,8 @@ async def read_chat_messages(
 
     if not any(p.user_id == current_user.id for p in chat.participants):
         raise HTTPException(status_code=403, detail="Not a participant of this chat")
+
+    await crud_chat.mark_chat_as_read(db=db, chat_id=chat_id, user_id=current_user.id)
 
     messages = await crud_message.get_chat_messages(
         db=db, chat_id=chat_id, skip=skip, limit=limit

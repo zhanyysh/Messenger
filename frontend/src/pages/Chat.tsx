@@ -22,6 +22,7 @@ interface Chat {
   type: 'private' | 'group';
   name: string | null;
   created_at: string;
+  unread_count?: number;
   participants: ChatParticipant[];
 }
 
@@ -146,22 +147,41 @@ export default function ChatDashboard() {
     }, 1200);
   };
 
-  // Initialize Chats
+  // Initialize and refresh chats to surface unread counters across chat rooms
   useEffect(() => {
-    const loadChats = async () => {
+    const refreshChats = async () => {
       const res = await authFetch('http://127.0.0.1:8000/api/v1/chats/');
       if (!res) return;
 
-      const data = await res.json();
-      setChats(data);
-      if (data.length > 0) {
+      const data: Chat[] = await res.json();
+      const currentActiveChatId = activeChat?.id;
+
+      const withActiveReset = data.map((chat) =>
+        currentActiveChatId && chat.id === currentActiveChatId
+          ? { ...chat, unread_count: 0 }
+          : chat
+      );
+
+      setChats(withActiveReset);
+
+      if (!currentActiveChatId && withActiveReset.length > 0) {
         setLoadingHistory(true);
-        setActiveChat(data[0]);
+        setActiveChat(withActiveReset[0]);
+        return;
+      }
+
+      if (currentActiveChatId) {
+        const refreshedActive = withActiveReset.find(c => c.id === currentActiveChatId);
+        if (refreshedActive) {
+          setActiveChat(refreshedActive);
+        }
       }
     };
 
-    loadChats();
-  }, [authFetch]);
+    refreshChats();
+    const interval = setInterval(refreshChats, 8000);
+    return () => clearInterval(interval);
+  }, [authFetch, activeChat?.id]);
 
   // Connect WebSockets when active chat changes
   useEffect(() => {
@@ -275,9 +295,10 @@ export default function ChatDashboard() {
   };
 
   const handleChatCreated = (newChat: Chat) => {
-    setChats([newChat, ...chats]);
+    const normalizedChat = { ...newChat, unread_count: newChat.unread_count ?? 0 };
+    setChats([normalizedChat, ...chats]);
     setLoadingHistory(true);
-    setActiveChat(newChat);
+    setActiveChat(normalizedChat);
   };
 
   const handleAddMember = async () => {
@@ -576,7 +597,9 @@ export default function ChatDashboard() {
                     key={chat.id} 
                     onClick={() => {
                       setLoadingHistory(true);
-                      setActiveChat(chat);
+                      const selectedChat = { ...chat, unread_count: 0 };
+                      setActiveChat(selectedChat);
+                      setChats(prev => prev.map(c => c.id === chat.id ? selectedChat : c));
                     }}
                     className={cn(
                       "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border",
@@ -594,6 +617,11 @@ export default function ChatDashboard() {
                       </h3>
                       <p className="text-xs text-textMuted truncate">Connected securely.</p>
                     </div>
+                    {(chat.unread_count ?? 0) > 0 && !isActive && (
+                      <div className="shrink-0 min-w-6 h-6 px-1 rounded-full bg-secondary/90 text-[10px] font-bold text-black flex items-center justify-center border border-secondary shadow-[0_0_12px_rgba(249,115,22,0.45)]">
+                        {(chat.unread_count ?? 0) > 99 ? '99+' : (chat.unread_count ?? 0)}
+                      </div>
+                    )}
                   </motion.div>
                 )
               })}

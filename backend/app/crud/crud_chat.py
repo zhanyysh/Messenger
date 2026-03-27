@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.models.chat import Chat, ChatParticipant, ChatType, ParticipantRole
+from app.models.message import Message
 from app.models.user import User
 from app.schemas.chat import ChatCreate
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -114,3 +117,28 @@ async def update_participant_role(
         await db.refresh(participant)
         return participant
     return None
+
+
+async def mark_chat_as_read(db: AsyncSession, chat_id: int, user_id: int) -> None:
+    participant = await get_participant(db=db, chat_id=chat_id, user_id=user_id)
+    if not participant:
+        return
+
+    participant.last_read_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+
+
+async def get_unread_count(db: AsyncSession, chat_id: int, user_id: int) -> int:
+    participant = await get_participant(db=db, chat_id=chat_id, user_id=user_id)
+    if not participant:
+        return 0
+
+    threshold = participant.last_read_at or participant.joined_at
+    stmt = select(func.count(Message.id)).filter(
+        Message.chat_id == chat_id,
+        Message.timestamp > threshold,
+        Message.sender_id != user_id,
+    )
+    result = await db.execute(stmt)
+    unread_count = result.scalar_one_or_none()
+    return unread_count or 0
