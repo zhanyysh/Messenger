@@ -63,6 +63,7 @@ export default function ChatDashboard() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -72,6 +73,9 @@ export default function ChatDashboard() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remoteTypingTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const isTypingRef = useRef(false);
 
   const handleUnauthorized = React.useCallback(() => {
     logout();
@@ -98,6 +102,49 @@ export default function ChatDashboard() {
 
     return response;
   }, [token, handleUnauthorized]);
+
+  const sendTypingState = React.useCallback((isTyping: boolean) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ event: 'typing', is_typing: isTyping }));
+  }, []);
+
+  const stopTyping = React.useCallback(() => {
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (isTypingRef.current) {
+      sendTypingState(false);
+      isTypingRef.current = false;
+    }
+  }, [sendTypingState]);
+
+  const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewMessage(value);
+
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      sendTypingState(true);
+      isTypingRef.current = true;
+    }
+
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+    }
+
+    typingStopTimerRef.current = setTimeout(() => {
+      if (isTypingRef.current) {
+        sendTypingState(false);
+        isTypingRef.current = false;
+      }
+      typingStopTimerRef.current = null;
+    }, 1200);
+  };
 
   // Initialize Chats
   useEffect(() => {
@@ -151,17 +198,65 @@ export default function ChatDashboard() {
     const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/${activeChat.id}?token=${token}`);
     
     socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      setMessages(prev => [...prev, msg]);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'typing') {
+          if (data.sender_id === user?.id) return;
+
+          if (data.is_typing) {
+            setTypingUsers(prev => ({ ...prev, [data.sender_id]: data.sender_name || 'Unknown' }));
+            const existingTimeout = remoteTypingTimeoutsRef.current[data.sender_id];
+            if (existingTimeout) {
+              clearTimeout(existingTimeout);
+            }
+            remoteTypingTimeoutsRef.current[data.sender_id] = setTimeout(() => {
+              setTypingUsers(prev => {
+                const next = { ...prev };
+                delete next[data.sender_id];
+                return next;
+              });
+              delete remoteTypingTimeoutsRef.current[data.sender_id];
+            }, 1800);
+          } else {
+            const existingTimeout = remoteTypingTimeoutsRef.current[data.sender_id];
+            if (existingTimeout) {
+              clearTimeout(existingTimeout);
+              delete remoteTypingTimeoutsRef.current[data.sender_id];
+            }
+            setTypingUsers(prev => {
+              const next = { ...prev };
+              delete next[data.sender_id];
+              return next;
+            });
+          }
+          return;
+        }
+
+        setMessages(prev => [...prev, data]);
+        if (data.sender_id) {
+          setTypingUsers(prev => {
+            if (!prev[data.sender_id]) return prev;
+            const next = { ...prev };
+            delete next[data.sender_id];
+            return next;
+          });
+        }
+      } catch {
+        // Ignore malformed WS packets
+      }
     };
 
     wsRef.current = socket;
 
     return () => {
+      stopTyping();
+      setTypingUsers({});
+      Object.values(remoteTypingTimeoutsRef.current).forEach(clearTimeout);
+      remoteTypingTimeoutsRef.current = {};
       socket.close();
       wsRef.current = null;
     };
-  }, [activeChat, token, authFetch, handleUnauthorized]);
+  }, [activeChat, token, authFetch, handleUnauthorized, stopTyping, user?.id]);
 
   // Auto-scroll
   useEffect(() => {
@@ -171,8 +266,11 @@ export default function ChatDashboard() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (wsRef.current && newMessage.trim()) {
-      wsRef.current.send(newMessage);
+      wsRef.current.send(
+        JSON.stringify({ event: 'message', content: newMessage, type: 'text' })
+      );
       setNewMessage('');
+      stopTyping();
     }
   };
 
@@ -420,6 +518,8 @@ export default function ChatDashboard() {
     const otherParticipant = chat.participants.find(p => p.user_id !== user?.id);
     return otherParticipant?.user.full_name || otherParticipant?.user.email || "Unknown Agent";
   };
+
+  const typingNames = Object.values(typingUsers);
 
   return (
     <div className="flex h-screen w-full p-2 lg:p-6 relative overflow-hidden">
@@ -673,6 +773,24 @@ export default function ChatDashboard() {
                         );
                       })
                     )}
+                    {typingNames.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-primary/20 bg-primary/5 text-primary/90"
+                      >
+                        <span className="inline-flex gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></span>
+                        </span>
+                        <span className="text-xs font-semibold tracking-wide">
+                          {typingNames.length === 1
+                            ? `${typingNames[0]} is typing...`
+                            : `${typingNames.length} operatives are typing...`}
+                        </span>
+                      </motion.div>
+                    )}
                     <div ref={messagesEndRef} />
                   </div>
 
@@ -759,7 +877,8 @@ export default function ChatDashboard() {
                         <input
                           type="text"
                           value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
+                          onChange={handleMessageInputChange}
+                          onBlur={stopTyping}
                           placeholder="Broadcast intercept..."
                           className="w-full bg-surface border border-border rounded-2xl py-4 pl-16 pr-16 text-white placeholder-textMuted/40 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all font-sans"
                           autoComplete="off"

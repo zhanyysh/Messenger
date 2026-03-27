@@ -63,15 +63,32 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_text()
+            event_type = "message"
             try:
                 # Try to parse as JSON for rich media messages
                 msg_data = json.loads(data)
+                event_type = msg_data.get("event", "message")
+
+                if event_type == "typing":
+                    typing_payload = {
+                        "event": "typing",
+                        "chat_id": chat_id,
+                        "sender_id": user.id,
+                        "sender_name": user.full_name or user.email,
+                        "is_typing": bool(msg_data.get("is_typing", True)),
+                    }
+                    await manager.broadcast(json.dumps(typing_payload), chat_id)
+                    continue
+
                 content = msg_data.get("content")
                 msg_type = msg_data.get("type", MessageType.TEXT)
             except json.JSONDecodeError:
                 # Fallback to plain text if not JSON
                 content = data
                 msg_type = MessageType.TEXT
+
+            if not content:
+                continue
 
             # Save message to DB
             msg_in = MessageCreate(content=content, type=msg_type)
@@ -81,6 +98,7 @@ async def websocket_endpoint(
 
             # Broadcast to all users in room
             payload = {
+                "event": "message",
                 "id": saved_msg.id,
                 "chat_id": chat_id,
                 "content": saved_msg.content,
