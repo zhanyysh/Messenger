@@ -18,32 +18,32 @@
     - [x] Implement Login endpoint (POST /auth/login) -> JWT
     - [x] Implement `get_current_user` dependency
 
-- [ ] **3. Auth (Frontend)**
-    - [ ] Create Login Page
-    - [ ] Create Registration Page
-    - [ ] Implement Auth Context (store token)
-    - [ ] Protected Route wrapper
+- [x] **3. Auth (Frontend)**
+    - [x] Create Login Page
+    - [x] Create Registration Page
+    - [x] Implement Auth Context (store token)
+    - [x] Protected Route wrapper
 
 - [x] **4. Messaging Core (Backend)**
-    - [ ] Define `Chat` and `Message` models
-    - [ ] Implement WebSocket endpoint (`/ws/chat/{chat_id}`)
-    - [ ] Implement `POST /api/chats` (create chat)
-    - [ ] Implement `GET /api/chats/{chat_id}/messages` (history)
+    - [x] Define `Chat` and `Message` models
+    - [x] Implement WebSocket endpoint (`/ws/chat/{chat_id}`)
+    - [x] Implement `POST /api/chats` (create chat)
+    - [x] Implement `GET /api/chats/{chat_id}/messages` (history)
 
-- [ ] **5. Messaging UI (Frontend)**
-    - [ ] Create Chat Layout (Sidebar + Message Area)
-    - [ ] Implement WebSocket connection logic
-    - [ ] Display incoming messages in real-time
-    - [ ] Send message input
+- [x] **5. Messaging UI (Frontend)**
+    - [x] Create Chat Layout (Sidebar + Message Area)
+    - [x] Implement WebSocket connection logic
+    - [x] Display incoming messages in real-time
+    - [x] Send message input
 
-- [ ] **6. Groups & Search**
-    - [ ] Backend: `POST /api/groups` (create group)
-    - [ ] Backend: `POST /api/groups/{id}/members` (add member)
-    - [ ] Frontend: User Search Component
-    - [ ] Frontend: Create Group Modal
+- [x] **6. Groups & Search**
+    - [x] Backend: `GET /api/users/search` (search by email/name)
+    - [x] Backend: `POST /api/groups/{id}/members` (add member)
+    - [x] Frontend: User Search Component
+    - [x] Frontend: Create Group Modal
 
-- [ ] **7. Rich Media**
-    - [ ] Backend: `POST /api/upload` (save to local disk)
-    - [ ] Backend: Serve static files
-    - [ ] Frontend: File Input & Image Preview
-    - [ ] Frontend: Audio Recorder for Voice Notes
+- [x] **7. Rich Media**
+    - [x] Backend: `POST /api/upload` (save to local disk)d
+    - [x] Backend: Serve static files
+    - [x] Frontend: File Input & Image Preview
+    - [x] Frontend: Audio Recorder for Voice Notes

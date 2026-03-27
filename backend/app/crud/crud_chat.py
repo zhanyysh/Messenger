@@ -48,3 +48,23 @@ async def get_user_chats(db: AsyncSession, user_id: int) -> List[Chat]:
     )
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+async def get_chat(db: AsyncSession, chat_id: int) -> Optional[Chat]:
+    stmt = (
+        select(Chat)
+        .options(selectinload(Chat.participants).selectinload(ChatParticipant.user))
+        .filter(Chat.id == chat_id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def add_chat_member(
+    db: AsyncSession, chat_id: int, user_id: int, role: ParticipantRole = ParticipantRole.MEMBER
+) -> ChatParticipant:
+    db_obj = ChatParticipant(chat_id=chat_id, user_id=user_id, role=role)
+    db.add(db_obj)
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj

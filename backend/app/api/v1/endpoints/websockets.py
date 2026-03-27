@@ -62,9 +62,18 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_text()
+            try:
+                # Try to parse as JSON for rich media messages
+                msg_data = json.loads(data)
+                content = msg_data.get("content")
+                msg_type = msg_data.get("type", MessageType.TEXT)
+            except json.JSONDecodeError:
+                # Fallback to plain text if not JSON
+                content = data
+                msg_type = MessageType.TEXT
             
             # Save message to DB
-            msg_in = MessageCreate(content=data, type=MessageType.TEXT)
+            msg_in = MessageCreate(content=content, type=msg_type)
             saved_msg = await crud_message.create_message(
                 db=db, obj_in=msg_in, chat_id=chat_id, sender_id=user.id
             )
@@ -74,6 +83,7 @@ async def websocket_endpoint(
                 "id": saved_msg.id,
                 "chat_id": chat_id,
                 "content": saved_msg.content,
+                "type": saved_msg.type,
                 "sender_id": user.id,
                 "sender_name": user.full_name or user.email,
                 "timestamp": saved_msg.timestamp.isoformat()
