@@ -3,7 +3,7 @@ from typing import Optional
 
 from app.models.message import MessageType
 from app.schemas.user import User
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MessageBase(BaseModel):
@@ -22,5 +22,4 @@ class MessageResponse(MessageBase):
     timestamp: datetime
     sender: User
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from app.models.chat import ChatType, ParticipantRole
 from app.schemas.user import User
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ChatParticipantBase(BaseModel):
@@ -23,8 +23,7 @@ class ChatParticipantResponse(ChatParticipantBase):
     joined_at: datetime
     user: User
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChatBase(BaseModel):
@@ -42,5 +41,4 @@ class ChatResponse(ChatBase):
     unread_count: int = 0
     participants: List[ChatParticipantResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
