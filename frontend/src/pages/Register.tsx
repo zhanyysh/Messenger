@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { UserPlus, Mail, Lock, User as UserIcon } from 'lucide-react';
+import { apiUrl } from '../lib/api';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function Register() {
@@ -21,7 +22,7 @@ export default function Register() {
 
     try {
       // 1. Register User
-      const regRes = await fetch('http://127.0.0.1:8000/api/v1/users/', {
+      const regRes = await fetch(apiUrl('/api/v1/users/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -43,7 +44,7 @@ export default function Register() {
       formData.append('username', email);
       formData.append('password', password);
 
-      const loginRes = await fetch('http://127.0.0.1:8000/api/v1/login/access-token', {
+      const loginRes = await fetch(apiUrl('/api/v1/login/access-token'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData,
@@ -52,7 +53,7 @@ export default function Register() {
       if (!loginRes.ok) throw new Error('Auto-login failed');
       const data = await loginRes.json();
       
-      const userRes = await fetch('http://127.0.0.1:8000/api/v1/users/me', {
+      const userRes = await fetch(apiUrl('/api/v1/users/me'), {
         headers: { 'Authorization': `Bearer ${data.access_token}` }
       });
       const userData = await userRes.json();

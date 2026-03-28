@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
+import { apiUrl, resolveApiUrl, wsUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 import CreateChatModal from '../components/CreateChatModal';
 
@@ -150,7 +151,7 @@ export default function ChatDashboard() {
   // Initialize and refresh chats to surface unread counters across chat rooms
   useEffect(() => {
     const refreshChats = async () => {
-      const res = await authFetch('http://127.0.0.1:8000/api/v1/chats/');
+      const res = await authFetch(apiUrl('/api/v1/chats/'));
       if (!res) return;
 
       const data: Chat[] = await res.json();
@@ -188,7 +189,7 @@ export default function ChatDashboard() {
     if (!activeChat) return;
 
     const loadMessages = async () => {
-      const res = await authFetch(`http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/messages`);
+      const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/messages`));
       if (!res) {
         setLoadingHistory(false);
         return;
@@ -215,7 +216,7 @@ export default function ChatDashboard() {
       return;
     }
 
-    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/chat/${activeChat.id}?token=${token}`);
+    const socket = new WebSocket(`${wsUrl(`/ws/chat/${activeChat.id}`)}?token=${token}`);
     
     socket.onmessage = (event) => {
       try {
@@ -309,7 +310,7 @@ export default function ChatDashboard() {
 
     // First find the user
     try {
-      const searchRes = await authFetch(`http://127.0.0.1:8000/api/v1/users/search?query=${encodeURIComponent(email)}`);
+      const searchRes = await authFetch(`${apiUrl('/api/v1/users/search')}?query=${encodeURIComponent(email)}`);
       if (!searchRes) return;
       const users: SearchUser[] = await searchRes.json();
       const targetUser = users.find((u) => u.email === email);
@@ -319,7 +320,7 @@ export default function ChatDashboard() {
         return;
       }
 
-      const res = await authFetch(`http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/members`, {
+      const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/members`), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
@@ -357,7 +358,7 @@ export default function ChatDashboard() {
     formData.append('file', file);
 
     try {
-      const res = await authFetch('http://127.0.0.1:8000/api/v1/upload/', {
+      const res = await authFetch(apiUrl('/api/v1/upload/'), {
         method: 'POST',
         body: formData
       });
@@ -420,7 +421,7 @@ export default function ChatDashboard() {
     formData.append('file', audioBlob, 'voice.webm');
 
     try {
-      const res = await authFetch('http://127.0.0.1:8000/api/v1/upload/', {
+      const res = await authFetch(apiUrl('/api/v1/upload/'), {
         method: 'POST',
         body: formData
       });
@@ -451,7 +452,7 @@ export default function ChatDashboard() {
 
     try {
       const res = await authFetch(
-        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/members/${userId}`,
+        apiUrl(`/api/v1/chats/${activeChat.id}/members/${userId}`),
         { method: 'DELETE' }
       );
       if (!res) return;
@@ -478,7 +479,7 @@ export default function ChatDashboard() {
 
     try {
       const res = await authFetch(
-        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/members/${userId}/role`,
+        apiUrl(`/api/v1/chats/${activeChat.id}/members/${userId}/role`),
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -514,7 +515,7 @@ export default function ChatDashboard() {
 
     try {
       const res = await authFetch(
-        `http://127.0.0.1:8000/api/v1/chats/${activeChat.id}/me`,
+        apiUrl(`/api/v1/chats/${activeChat.id}/me`),
         { method: 'DELETE' }
       );
       if (!res) return;
@@ -723,18 +724,18 @@ export default function ChatDashboard() {
 
                               {msg.type === 'image' && (
                                 <img
-                                  src={`http://127.0.0.1:8000${msg.content}`}
+                                  src={resolveApiUrl(msg.content)}
                                   alt="Uploaded content"
                                   className="rounded-lg max-w-full h-auto border border-black/10 cursor-pointer hover:opacity-90 transition-opacity"
                                   onClick={() =>
-                                    window.open(`http://127.0.0.1:8000${msg.content}`, '_blank')
+                                    window.open(resolveApiUrl(msg.content), '_blank')
                                   }
                                 />
                               )}
 
                               {msg.type === 'file' && (
                                 <a
-                                  href={`http://127.0.0.1:8000${msg.content}`}
+                                  href={resolveApiUrl(msg.content)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className={cn(
@@ -763,7 +764,7 @@ export default function ChatDashboard() {
                                 <div className="flex items-center gap-3 min-w-[200px]">
                                   <button
                                     onClick={() => {
-                                      const audio = new Audio(`http://127.0.0.1:8000${msg.content}`);
+                                      const audio = new Audio(resolveApiUrl(msg.content));
                                       audio.play();
                                     }}
                                     className={cn(

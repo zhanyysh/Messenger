@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Users, MessageSquare, Shield, Loader2, Info } from 'lucide-react';
 import UserSearch from './UserSearch';
 import { useAuthStore } from '../store/useAuthStore';
+import { apiUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface User {
@@ -56,7 +57,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
     setError(null);
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/chats/', {
+      const res = await fetch(apiUrl('/api/v1/chats/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

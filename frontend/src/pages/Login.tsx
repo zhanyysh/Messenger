@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Lock, ShieldAlert } from 'lucide-react';
+import { apiUrl } from '../lib/api';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function Login() {
@@ -22,7 +23,7 @@ export default function Login() {
       formData.append('username', identifier);
       formData.append('password', password);
 
-      const response = await fetch('http://127.0.0.1:8000/api/v1/login/access-token', {
+      const response = await fetch(apiUrl('/api/v1/login/access-token'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData,
@@ -34,7 +35,7 @@ export default function Login() {
 
       const data = await response.json();
       
-      const userRes = await fetch('http://127.0.0.1:8000/api/v1/users/me', {
+      const userRes = await fetch(apiUrl('/api/v1/users/me'), {
         headers: { 'Authorization': `Bearer ${data.access_token}` }
       });
       const userData = await userRes.json();

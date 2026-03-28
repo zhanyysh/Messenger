@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, User as UserIcon, X, Check, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { apiUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface User {
@@ -39,7 +40,7 @@ export default function UserSearch({
 
       setLoading(true);
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/v1/users/search?query=${encodeURIComponent(query)}`, {
+        const res = await fetch(`${apiUrl('/api/v1/users/search')}?query=${encodeURIComponent(query)}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {

@@ -1,5 +1,36 @@
 # React + TypeScript + Vite
 
+## Environment Variables
+
+Frontend backend endpoints are env-driven:
+
+- `VITE_API_BASE_URL` (default: `http://127.0.0.1:8000`)
+- `VITE_WS_BASE_URL` (optional; derived from `VITE_API_BASE_URL` when omitted)
+
+Copy `.env.example` to `.env` and adjust values for your target environment.
+
+Environment presets:
+
+- `.env.development.example`
+- `.env.staging.example`
+- `.env.production.example`
+
+Environment matrix:
+
+| Environment | API base example | WS base example |
+| --- | --- | --- |
+| Development | `http://127.0.0.1:8000` | `ws://127.0.0.1:8000` |
+| Staging | `https://api-staging.example.com` | `wss://api-staging.example.com` |
+| Production | `https://api.example.com` | `wss://api.example.com` |
+
+Vite loading behavior:
+
+- `npm run dev` loads `.env` and `.env.development`
+- `vite build --mode staging` loads `.env` and `.env.staging`
+- `vite build` (production mode) loads `.env` and `.env.production`
+
+For GCP Cloud Run, set `VITE_API_BASE_URL` to your backend HTTPS URL. Keep `VITE_WS_BASE_URL` unset unless websockets are served from a different domain.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

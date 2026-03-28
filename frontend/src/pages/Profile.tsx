@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Save, UserRound } from 'lucide-react';
+import { apiUrl } from '../lib/api';
 import { useAuthStore } from '../store/useAuthStore';
 
 interface ProfileResponse {
@@ -34,7 +35,7 @@ export default function Profile() {
       }
 
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/v1/users/me', {
+        const res = await fetch(apiUrl('/api/v1/users/me'), {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -79,7 +80,7 @@ export default function Profile() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/users/me', {
+      const res = await fetch(apiUrl('/api/v1/users/me'), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
