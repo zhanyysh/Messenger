@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import ChatDashboard from './Chat';
@@ -7,8 +7,14 @@ import { useAuthStore } from '../store/useAuthStore';
 
 class MockWebSocket {
   static OPEN = 1;
+  static instances: MockWebSocket[] = [];
   readyState = MockWebSocket.OPEN;
   onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(url: string) {
+    void url;
+    MockWebSocket.instances.push(this);
+  }
 
   send = vi.fn();
   close = vi.fn();
@@ -96,6 +102,8 @@ describe('Chat unread badge', () => {
         return makeJsonResponse([]);
       })
     );
+
+    MockWebSocket.instances = [];
   });
 
   afterEach(() => {
@@ -113,6 +121,41 @@ describe('Chat unread badge', () => {
 
     await screen.findByText('Omega');
     expect(await screen.findByText('3')).toBeInTheDocument();
+    view.unmount();
+  });
+
+  it('sends typing true on input and typing false on blur', async () => {
+    const view = render(
+      <MemoryRouter>
+        <ChatDashboard />
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Omega');
+    expect(MockWebSocket.instances.length).toBeGreaterThan(0);
+
+    const input = await screen.findByPlaceholderText('Broadcast intercept...');
+    const typingTruePayload = JSON.stringify({ event: 'typing', is_typing: true });
+    const typingFalsePayload = JSON.stringify({ event: 'typing', is_typing: false });
+
+    fireEvent.change(input, { target: { value: 'h' } });
+
+    await waitFor(() => {
+      const sentTypingTrue = MockWebSocket.instances.some((socket) =>
+        socket.send.mock.calls.some((call) => call[0] === typingTruePayload)
+      );
+      expect(sentTypingTrue).toBe(true);
+    });
+
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      const sentTypingFalse = MockWebSocket.instances.some((socket) =>
+        socket.send.mock.calls.some((call) => call[0] === typingFalsePayload)
+      );
+      expect(sentTypingFalse).toBe(true);
+    });
+
     view.unmount();
   });
 });
