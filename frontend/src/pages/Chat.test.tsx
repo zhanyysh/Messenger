@@ -124,6 +124,25 @@ describe('Chat unread badge', () => {
     view.unmount();
   });
 
+  it('clears unread badge after opening that chat', async () => {
+    const view = render(
+      <MemoryRouter>
+        <ChatDashboard />
+      </MemoryRouter>
+    );
+
+    const omegaChat = await screen.findByText('Omega');
+    expect(await screen.findByText('3')).toBeInTheDocument();
+
+    fireEvent.click(omegaChat);
+
+    await waitFor(() => {
+      expect(screen.queryByText('3')).not.toBeInTheDocument();
+    });
+
+    view.unmount();
+  });
+
   it('sends typing true on input and typing false on blur', async () => {
     const view = render(
       <MemoryRouter>
