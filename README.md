@@ -41,3 +41,5 @@ Notes:
 
 - In compose, `DATABASE_URL` is overridden to the internal Postgres service URL.
 - Postgres data is persisted in the `postgres_data` Docker volume.
+- Migrations run automatically via the `migrate` service before `backend` starts.
+- To re-run migrations manually: `docker compose run --rm migrate`.
