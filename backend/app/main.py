@@ -9,10 +9,18 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Messenger API")
 
+cors_origins = ["*"]
+if settings.BACKEND_CORS_ORIGINS.strip() != "*":
+    cors_origins = [
+        origin.strip()
+        for origin in settings.BACKEND_CORS_ORIGINS.split(",")
+        if origin.strip()
+    ]
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

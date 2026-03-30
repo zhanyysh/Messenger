@@ -1,5 +1,7 @@
 # GLSMSG Workspace
 
+For GCP deployment, follow [DEPLOY_GCP.md](DEPLOY_GCP.md).
+
 ## Frontend Deployment Config
 
 Frontend API and WebSocket base URLs are environment-driven via Vite variables:
