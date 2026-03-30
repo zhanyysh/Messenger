@@ -24,9 +24,9 @@ The helper that resolves these values lives in [frontend/src/lib/api.ts](fronten
 3. Leave VITE_WS_BASE_URL unset unless websocket traffic uses a different host.
 4. Build with the intended mode (for example, vite build --mode staging).
 
-## Docker Compose (Backend + Postgres)
+## Docker Compose (Frontend + Backend + Postgres)
 
-Use [docker-compose.yml](docker-compose.yml) to run API and database together.
+Use [docker-compose.yml](docker-compose.yml) to run the full stack.
 
 1. Ensure [backend/.env](backend/.env) contains at least SECRET_KEY and other app settings.
 2. Start services:
@@ -35,7 +35,8 @@ Use [docker-compose.yml](docker-compose.yml) to run API and database together.
 docker compose up --build
 ```
 
-3. API will be available at `http://localhost:8000`.
+3. Frontend will be available at `http://localhost:3000`.
+4. API will be available at `http://localhost:8000`.
 
 Notes:
 
@@ -43,3 +44,4 @@ Notes:
 - Postgres data is persisted in the `postgres_data` Docker volume.
 - Migrations run automatically via the `migrate` service before `backend` starts.
 - To re-run migrations manually: `docker compose run --rm migrate`.
+- Frontend build args in compose set `VITE_API_BASE_URL` and `VITE_WS_BASE_URL` for browser access.
