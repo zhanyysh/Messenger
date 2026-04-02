@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 
 ARG VITE_API_BASE_URL=https://messenger-1087744761151.asia-south1.run.app
-ARG VITE_WS_BASE_URL=ws://messenger-1087744761151.asia-south1.run.app/
+ARG VITE_WS_BASE_URL=wss://messenger-1087744761151.asia-south1.run.app
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ENV VITE_WS_BASE_URL=${VITE_WS_BASE_URL}
 
