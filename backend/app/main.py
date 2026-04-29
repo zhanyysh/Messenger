@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="Messenger API")
+app = FastAPI(title="Wazzup API")
 
 cors_origins = ["*"]
 if settings.BACKEND_CORS_ORIGINS.strip() != "*":

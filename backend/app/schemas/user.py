@@ -34,7 +34,7 @@ class UserProfileUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
-class UserInDBBase(UserBase):
+class UserInDBBase(BaseModel):
     id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
