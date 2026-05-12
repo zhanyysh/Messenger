@@ -490,7 +490,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     setActiveChat(normalizedChat);
   };
 
-  const handleMembersAdded = (newMembers: any[]) => {
+  const handleMembersAdded = (newMembers: ChatParticipant[]) => {
     if (!activeChat) return;
     const updatedChat = {
       ...activeChat,

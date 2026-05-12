@@ -11,11 +11,18 @@ interface User {
   avatar_url: string | null;
 }
 
+interface ChatParticipantResponse {
+  user_id: number;
+  role: string;
+  joined_at: string;
+  user: User;
+}
+
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
   chatId: number;
-  onMembersAdded: (newMembers: any[]) => void;
+  onMembersAdded: (newMembers: ChatParticipantResponse[]) => void;
   existingParticipantIds: number[];
 }
 
@@ -43,7 +50,7 @@ export default function AddMemberModal({
     setLoading(true);
     setError(null);
 
-    const results: any[] = [];
+    const results: ChatParticipantResponse[] = [];
     let failureCount = 0;
 
     try {
