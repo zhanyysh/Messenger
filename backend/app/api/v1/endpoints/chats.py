@@ -71,11 +71,30 @@ async def update_chat(
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     updated_chat = await crud_chat.update_chat(db, db_obj=chat, obj_in=chat_in)
+    # Set unread count
     setattr(
         updated_chat,
         "unread_count",
         await crud_chat.get_unread_count(db, chat_id, current_user.id),
     )
+    # Ensure participants are properly loaded
+    if updated_chat and not hasattr(updated_chat, "participants"):
+        from app.models.chat import Chat, ChatParticipant
+        from sqlalchemy.future import select
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(Chat)
+            .options(selectinload(Chat.participants).selectinload(ChatParticipant.user))
+            .filter(Chat.id == chat_id)
+        )
+        result = await db.execute(stmt)
+        updated_chat = result.scalars().first()
+        setattr(
+            updated_chat,
+            "unread_count",
+            await crud_chat.get_unread_count(db, chat_id, current_user.id),
+        )
     return updated_chat
 
 

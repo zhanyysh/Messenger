@@ -77,8 +77,15 @@ async def update_chat(
         db_obj.image_url = obj_in.image_url.strip() or None
 
     await db.commit()
-    await db.refresh(db_obj)
-    return db_obj
+
+    # Reload with relationships for full response
+    stmt = (
+        select(Chat)
+        .options(selectinload(Chat.participants).selectinload(ChatParticipant.user))
+        .filter(Chat.id == db_obj.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
 
 
 async def add_chat_member(
@@ -130,8 +137,15 @@ async def update_participant_role(
     if participant:
         participant.role = new_role
         await db.commit()
-        await db.refresh(participant)
-        return participant
+
+        # Reload with user relationship for response
+        stmt = (
+            select(ChatParticipant)
+            .options(selectinload(ChatParticipant.user))
+            .filter(ChatParticipant.id == participant.id)
+        )
+        result = await db.execute(stmt)
+        return result.scalars().first()
     return None
 
 
