@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Search, User as UserIcon, X, Check, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { apiUrl } from '../lib/api';
+import { apiUrl, resolveApiUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface User {
   id: number;
   email: string;
   full_name: string | null;
+  avatar_url: string | null;
 }
 
 interface UserSearchProps {
@@ -16,6 +17,7 @@ interface UserSearchProps {
   onRemove: (userId: number) => void;
   placeholder?: string;
   multiSelect?: boolean;
+  excludeIds?: number[];
 }
 
 export default function UserSearch({ 
@@ -23,7 +25,8 @@ export default function UserSearch({
   selectedUsers, 
   onRemove, 
   placeholder = "Search operatives...",
-  multiSelect = true
+  multiSelect = true,
+  excludeIds = []
 }: UserSearchProps) {
   const { token } = useAuthStore();
   const [query, setQuery] = useState('');
@@ -115,28 +118,44 @@ export default function UserSearch({
               <div className="p-2 space-y-1">
                 {results.map(user => {
                   const isSelected = selectedUsers.some(u => u.id === user.id);
+                  const isAlreadyInChat = excludeIds.includes(user.id);
+                  
                   return (
                     <button
                       key={user.id}
-                      onClick={() => handleSelect(user)}
-                      disabled={isSelected}
+                      type="button"
+                      onClick={() => !isAlreadyInChat && handleSelect(user)}
+                      disabled={isSelected || isAlreadyInChat}
                       className={cn(
                         "w-full flex items-center justify-between p-3 rounded-lg text-left transition-all",
-                        isSelected 
+                        (isSelected || isAlreadyInChat)
                           ? "opacity-50 cursor-default bg-white/5" 
                           : "hover:bg-white/5 group"
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-textMuted group-hover:text-primary group-hover:border-primary/50 transition-colors">
-                          <UserIcon className="w-4 h-4" />
+                        <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-textMuted group-hover:text-primary group-hover:border-primary/50 transition-colors overflow-hidden">
+                          {user.avatar_url ? (
+                            <img
+                              src={resolveApiUrl(user.avatar_url)}
+                              alt={user.full_name || user.email || 'User avatar'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <UserIcon className="w-4 h-4" />
+                          )}
                         </div>
                         <div>
                           <p className="text-sm font-medium text-white">{user.full_name || "Anonymous Operative"}</p>
                           <p className="text-xs text-textMuted">{user.email}</p>
                         </div>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-primary" />}
+                      <div className="flex items-center gap-2">
+                        {isAlreadyInChat && (
+                          <span className="text-[10px] font-bold text-primary/40 uppercase tracking-widest border border-primary/20 px-2 py-0.5 rounded-md">Already in Node</span>
+                        )}
+                        {isSelected && <Check className="w-4 h-4 text-primary" />}
+                      </div>
                     </button>
                   );
                 })}

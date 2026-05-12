@@ -15,7 +15,12 @@ interface ProfileResponse {
   last_seen: string | null;
 }
 
-export default function Profile() {
+interface ProfileProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function Profile({ isOpen, onClose }: ProfileProps) {
   const navigate = useNavigate();
   const { token, user, updateUser, logout } = useAuthStore();
 
@@ -30,6 +35,7 @@ export default function Profile() {
   const [success, setSuccess] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isModal = isOpen !== undefined;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -177,24 +183,52 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className={isModal ? 'fixed inset-0 z-[130] flex items-center justify-center' : 'min-h-screen flex items-center justify-center'}>
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
 
+  if (isOpen === false) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen w-full p-4 lg:p-8">
-      <div className="max-w-3xl mx-auto glass-panel p-6 lg:p-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-display font-bold text-gradient">Identity Profile</h1>
-            <p className="text-textMuted text-sm mt-1">Manage your public identity across the secure network.</p>
+    <div
+      className={isModal ? 'fixed inset-0 z-[130] flex items-center justify-center p-4 sm:p-6' : 'min-h-screen w-full relative overflow-hidden flex items-center justify-center p-0 lg:p-0'}
+      onClick={isModal ? onClose : undefined}
+    >
+      <div className={isModal ? 'absolute inset-0 bg-black/75 backdrop-blur-md' : 'fixed top-0 left-0 w-full h-full pointer-events-none mix-blend-screen opacity-20'}>
+        {isModal ? (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(255,255,255,0.03),_transparent_40%)]" />
+        ) : (
+          <>
+            <div className="absolute top-10 left-10 w-[500px] h-[500px] bg-primary/30 rounded-full filter blur-[150px] animate-blob"></div>
+            <div className="absolute bottom-10 right-10 w-[600px] h-[600px] bg-secondary/30 rounded-full filter blur-[150px] animate-blob" style={{ animationDelay: '2s' }}></div>
+          </>
+        )}
+      </div>
+
+      <div
+        className={isModal ? 'glass-panel w-full max-w-4xl max-h-[90vh] p-6 lg:p-8 relative z-10 overflow-hidden shadow-2xl animate-in fade-in zoom-in slide-in-from-bottom-4 duration-300' : 'w-full h-full glass-panel border-0 rounded-none p-6 lg:p-12 relative z-10 overflow-y-auto'}
+        onClick={isModal ? (e) => e.stopPropagation() : undefined}
+      >
+        <div className={isModal ? 'max-w-4xl mx-auto max-h-[calc(90vh-3rem)] overflow-y-auto pr-1' : 'max-w-4xl mx-auto'}>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-4xl font-display font-bold text-gradient">Identity Profile</h1>
+              <p className="text-textMuted text-base mt-1 font-medium tracking-wide">Manage your public identity across the secure network.</p>
+            </div>
+            {isModal ? (
+              <button type="button" onClick={onClose} className="p-3 bg-surface border border-border rounded-xl text-textMuted hover:text-white transition-all shadow-lg" title="Close profile">
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            ) : (
+              <Link to="/" className="p-3 bg-surface border border-border rounded-xl text-textMuted hover:text-white transition-all shadow-lg" title="Back to chat">
+                <ArrowLeft className="w-6 h-6" />
+              </Link>
+            )}
           </div>
-          <Link to="/" className="p-2 bg-surface border border-border rounded-xl text-textMuted hover:text-white transition-all" title="Back to chat">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-        </div>
 
         <form onSubmit={handleSave} className="space-y-8">
           {/* Avatar Section */}
@@ -329,6 +363,7 @@ export default function Profile() {
             SYNCHRONIZE IDENTITY
           </button>
         </form>
+        </div>
       </div>
     </div>
   );

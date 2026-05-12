@@ -74,7 +74,7 @@ export default function Login() {
           </motion.div>
           
           <h1 className="text-5xl font-display font-bold tracking-tighter mb-3">
-            GLS<span className="text-gradient">MSG</span>
+            Wazz<span className="text-gradient">up</span>
           </h1>
           <p className="text-textMuted font-sans text-lg tracking-wide">Enter the grid.</p>
         </div>

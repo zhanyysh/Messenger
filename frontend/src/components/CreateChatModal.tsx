@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { X, Users, MessageSquare, Shield, Loader2, Info } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Users, MessageSquare, Shield, Loader2, Info, Image as ImageIcon, Trash2 } from 'lucide-react';
 import UserSearch from './UserSearch';
 import { useAuthStore } from '../store/useAuthStore';
-import { apiUrl } from '../lib/api';
+import { apiUrl, resolveApiUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface User {
   id: number;
   email: string;
   full_name: string | null;
+  avatar_url: string | null;
 }
 
 interface CreateChatModalProps {
@@ -28,6 +29,7 @@ interface Chat {
   id: number;
   type: 'private' | 'group';
   name: string | null;
+  image_url: string | null;
   created_at: string;
   participants: ChatParticipant[];
 }
@@ -36,9 +38,12 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
   const { token } = useAuthStore();
   const [type, setType] = useState<'private' | 'group'>('private');
   const [name, setName] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const groupImageInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -66,6 +71,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
         body: JSON.stringify({
           type,
           name: type === 'group' ? name : null,
+          image_url: type === 'group' ? imageUrl || null : null,
           participant_emails: selectedUsers.map(u => u.email)
         })
       });
@@ -76,6 +82,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
         onClose();
         // Reset
         setName('');
+        setImageUrl('');
         setSelectedUsers([]);
         setType('private');
       } else {
@@ -86,6 +93,39 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
       setError("Network failure. Connection lost.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGroupImageUpload = async (file: File) => {
+    if (!token) return;
+
+    setUploadingImage(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(apiUrl('/api/v1/upload/'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Upload failed');
+      }
+
+      const data = await res.json();
+      setImageUrl(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload group photo');
+    } finally {
+      setUploadingImage(false);
+      if (groupImageInputRef.current) {
+        groupImageInputRef.current.value = '';
+      }
     }
   };
 
@@ -155,6 +195,70 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
                 placeholder="Enter cluster name..."
                 className="w-full bg-surface border border-border rounded-xl py-3 px-4 text-sm text-white placeholder-textMuted/40 focus:outline-none focus:ring-1 focus:ring-secondary/50 transition-all"
               />
+            </div>
+          )}
+
+          {type === 'group' && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-xs font-bold text-textMuted uppercase tracking-wider ml-1">Group Photo</label>
+              <input
+                ref={groupImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    void handleGroupImageUpload(file);
+                  }
+                }}
+              />
+
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => groupImageInputRef.current?.click()}
+                  disabled={uploadingImage}
+                  className={cn(
+                    "w-16 h-16 rounded-2xl border border-dashed border-border flex items-center justify-center overflow-hidden bg-surface text-textMuted transition-all",
+                    imageUrl && "border-solid border-primary/30",
+                    !uploadingImage && "hover:border-primary/50 hover:text-primary"
+                  )}
+                  title="Upload group photo"
+                >
+                  {uploadingImage ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  ) : imageUrl ? (
+                    <img
+                      src={resolveApiUrl(imageUrl)}
+                      alt="Group preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-5 h-5" />
+                  )}
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium">
+                    {imageUrl ? 'Photo ready' : 'Add a group cover'}
+                  </p>
+                  <p className="text-[10px] text-textMuted mt-1">
+                    JPG, PNG or WebP. Used as the group avatar.
+                  </p>
+                </div>
+
+                {imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="p-2 rounded-xl bg-secondary/10 text-secondary border border-secondary/20 hover:bg-secondary/20 transition-all"
+                    title="Remove photo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

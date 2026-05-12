@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X, Settings2, Upload, Image as ImageIcon } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiUrl, resolveApiUrl, wsUrl } from '../lib/api';
 import { cn } from '../lib/utils';
 import CreateChatModal from '../components/CreateChatModal';
+import AddMemberModal from '../components/AddMemberModal';
+import Profile from './Profile';
 
 interface ChatParticipant {
   user_id: number;
@@ -15,6 +17,7 @@ interface ChatParticipant {
     id: number;
     email: string;
     full_name: string | null;
+    avatar_url: string | null;
   };
 }
 
@@ -22,6 +25,7 @@ interface Chat {
   id: number;
   type: 'private' | 'group';
   name: string | null;
+  image_url: string | null;
   created_at: string;
   unread_count?: number;
   participants: ChatParticipant[];
@@ -33,6 +37,7 @@ interface Message {
   type: 'text' | 'image' | 'file' | 'voice';
   sender_id: number;
   sender_name: string;
+  sender_avatar_url?: string | null;
   timestamp: string;
   is_edited?: boolean;
 }
@@ -41,6 +46,21 @@ interface ContextMenu {
   x: number;
   y: number;
   messageId: number;
+}
+
+interface ConfirmationDialogState {
+  title: string;
+  message: string;
+  confirmText: string;
+  action: 'leave_chat' | 'delete_chat' | 'remove_group_photo' | 'remove_member';
+  payload?: {
+    userId?: number;
+  };
+}
+
+interface NotificationState {
+  message: string;
+  tone: 'success' | 'error' | 'info';
 }
 
 interface HistoryMessageApi {
@@ -52,18 +72,18 @@ interface HistoryMessageApi {
   sender?: {
     email: string;
     full_name: string | null;
+    avatar_url: string | null;
   };
 }
 
-interface SearchUser {
-  id: number;
-  email: string;
-  full_name: string | null;
+interface ChatDashboardProps {
+  profileOpenOnLoad?: boolean;
 }
 
-export default function ChatDashboard() {
+export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboardProps) {
   const { token, user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
@@ -71,12 +91,17 @@ export default function ChatDashboard() {
   const [newMessage, setNewMessage] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(profileOpenOnLoad);
+  const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState | null>(null);
+  const [notification, setNotification] = useState<NotificationState | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,6 +111,7 @@ export default function ChatDashboard() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const groupPhotoInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -97,6 +123,14 @@ export default function ChatDashboard() {
     logout();
     navigate('/login', { replace: true });
   }, [logout, navigate]);
+
+  const closeProfileModal = React.useCallback(() => {
+    setIsProfileModalOpen(false);
+
+    if (location.pathname === '/profile') {
+      navigate('/', { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   const authFetch = React.useCallback(async (
     input: RequestInfo | URL,
@@ -134,6 +168,13 @@ export default function ChatDashboard() {
       isTypingRef.current = false;
     }
   }, [sendTypingState]);
+
+  const pushNotification = React.useCallback((message: string, tone: NotificationState['tone'] = 'info') => {
+    setNotification({ message, tone });
+    window.setTimeout(() => {
+      setNotification((current) => (current?.message === message ? null : current));
+    }, 2800);
+  }, []);
 
   const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -214,7 +255,8 @@ export default function ChatDashboard() {
       const history: Message[] = data.map((d) => ({
         id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
         type: d.type,
-        sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
+        sender_name: d.sender?.full_name || d.sender?.email || "Unknown",
+        sender_avatar_url: d.sender?.avatar_url || null,
       }));
       setMessages(history);
       setLoadingHistory(false);
@@ -277,7 +319,17 @@ export default function ChatDashboard() {
           return;
         }
 
-        setMessages(prev => [...prev, data]);
+        const incomingMessage: Message = {
+          id: data.id,
+          content: data.content,
+          type: data.type,
+          sender_id: data.sender_id,
+          sender_name: data.sender_name || 'Unknown',
+          sender_avatar_url: data.sender_avatar_url || null,
+          timestamp: data.timestamp,
+        };
+
+        setMessages(prev => [...prev, incomingMessage]);
         if (data.sender_id) {
           setTypingUsers(prev => {
             if (!prev[data.sender_id]) return prev;
@@ -369,7 +421,8 @@ export default function ChatDashboard() {
           const history: Message[] = data.map((d) => ({
             id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
             type: d.type,
-            sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
+            sender_name: d.sender?.full_name || d.sender?.email || "Unknown",
+            sender_avatar_url: d.sender?.avatar_url || null,
           }));
           setMessages(history);
         }
@@ -415,7 +468,8 @@ export default function ChatDashboard() {
           const mapped: Message[] = data.map(d => ({
             id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
             type: d.type,
-            sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
+            sender_name: d.sender?.full_name || d.sender?.email || "Unknown",
+            sender_avatar_url: d.sender?.avatar_url || null,
           }));
           setSearchResults(mapped);
         }
@@ -436,52 +490,95 @@ export default function ChatDashboard() {
     setActiveChat(normalizedChat);
   };
 
-  const handleAddMember = async () => {
+  const handleMembersAdded = (newMembers: any[]) => {
+    if (!activeChat) return;
+    const updatedChat = {
+      ...activeChat,
+      participants: [...activeChat.participants, ...newMembers]
+    };
+    setActiveChat(updatedChat);
+    setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+  };
+
+  const syncUpdatedChat = (updatedChat: Chat) => {
+    setActiveChat(prev => (prev?.id === updatedChat.id ? updatedChat : prev));
+    setChats(prev => prev.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)));
+  };
+
+  const updateGroupPhoto = async (imageUrl: string | null) => {
     if (!activeChat || activeChat.type !== 'group') return;
-    
-    const email = prompt("Direct Invite: Enter the exact identifier of the new operative.");
-    if (!email) return;
 
-    // First find the user
     try {
-      const searchRes = await authFetch(`${apiUrl('/api/v1/users/search')}?query=${encodeURIComponent(email)}`);
-      if (!searchRes) return;
-      const users: SearchUser[] = await searchRes.json();
-      const targetUser = users.find((u) => u.email === email);
-      
-      if (!targetUser) {
-        alert("Operative not found in registry.");
-        return;
-      }
-
-      const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/members`), {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          user_id: targetUser.id,
-          role: "member"
-        })
+      const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: imageUrl }),
       });
+
       if (!res) return;
-      
+
       if (res.ok) {
-        const newMember = await res.json();
-        const updatedChat = {
-          ...activeChat,
-          participants: [...activeChat.participants, newMember]
-        };
-        setActiveChat(updatedChat);
-        setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
-        alert("Operative successfully synchronized to node.");
+        const updatedChat: Chat = await res.json();
+        syncUpdatedChat(updatedChat);
+        pushNotification('Group photo updated.', 'success');
       } else {
         const err = await res.json();
-        alert(err.detail || "Access denied or synchronization failed.");
+        pushNotification(err.detail || 'Failed to update group photo.', 'error');
       }
     } catch {
-      alert("Network failure during synchronization.");
+      pushNotification('Network failure during photo update.', 'error');
     }
+  };
+
+  const handleGroupPhotoUpload = async (file: File) => {
+    if (!token) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await authFetch(apiUrl('/api/v1/upload/'), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res) return;
+
+      if (res.ok) {
+        const data = await res.json();
+        await updateGroupPhoto(data.url);
+        pushNotification('Group photo uploaded.', 'success');
+      } else {
+        const err = await res.json();
+        pushNotification(err.detail || 'Failed to upload group photo.', 'error');
+      }
+    } catch {
+      pushNotification('Network failure during photo upload.', 'error');
+    } finally {
+      if (groupPhotoInputRef.current) {
+        groupPhotoInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveGroupPhoto = async () => {
+    if (!activeChat || activeChat.type !== 'group') return;
+    setConfirmationDialog({
+      title: 'Remove group photo?',
+      message: 'This will clear the current group avatar. You can upload a new one later.',
+      confirmText: 'Remove photo',
+      action: 'remove_group_photo',
+    });
+  };
+
+  const toggleParticipantsPanel = () => {
+    setShowParticipantsPanel((prev) => !prev);
+    setShowGroupSettingsModal(false);
+  };
+
+  const openAddMembers = () => {
+    setIsAddMemberModalOpen(true);
+    setShowGroupSettingsModal(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -533,7 +630,7 @@ export default function ChatDashboard() {
       }, 1000);
     } catch (err) {
       console.error("Voice recording failed", err);
-      alert("Mic access denied.");
+      pushNotification('Mic access denied.', 'error');
     }
   };
 
@@ -582,7 +679,18 @@ export default function ChatDashboard() {
 
   const handleRemoveMember = async (userId: number) => {
     if (!activeChat || !token) return;
-    if (!confirm("Remove this operative from the node?")) return;
+
+    setConfirmationDialog({
+      title: 'Remove this operative?',
+      message: 'This will remove the user from the group.',
+      confirmText: 'Remove operative',
+      action: 'remove_member',
+      payload: { userId },
+    });
+  };
+
+  const performRemoveMember = async (userId: number) => {
+    if (!activeChat || !token) return;
 
     try {
       const res = await authFetch(
@@ -598,13 +706,13 @@ export default function ChatDashboard() {
         };
         setActiveChat(updatedChat);
         setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
-        alert("Operative removed.");
+        pushNotification('Operative removed.', 'success');
       } else {
         const err = await res.json();
-        alert(err.detail || "Failed to remove operative.");
+        pushNotification(err.detail || 'Failed to remove operative.', 'error');
       }
     } catch {
-      alert("Network failure during removal.");
+      pushNotification('Network failure during removal.', 'error');
     }
   };
 
@@ -633,19 +741,29 @@ export default function ChatDashboard() {
         setActiveChat(updatedChat);
         setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
         const action = newRole === 'admin' ? 'promoted to' : 'demoted to';
-        alert(`Operative ${action} ${newRole}.`);
+        pushNotification(`Operative ${action} ${newRole}.`, 'success');
       } else {
         const err = await res.json();
-        alert(err.detail || "Failed to update operative role.");
+        pushNotification(err.detail || 'Failed to update operative role.', 'error');
       }
     } catch {
-      alert("Network failure during role update.");
+      pushNotification('Network failure during role update.', 'error');
     }
   };
 
   const handleLeaveChat = async () => {
     if (!activeChat || !token) return;
-    if (!confirm("Leave this secure node?")) return;
+
+    setConfirmationDialog({
+      title: 'Leave this chat?',
+      message: 'You will be removed from this conversation and will not receive new messages here.',
+      confirmText: 'Leave chat',
+      action: 'leave_chat',
+    });
+  };
+
+  const performLeaveChat = async () => {
+    if (!activeChat || !token) return;
 
     try {
       const res = await authFetch(
@@ -658,13 +776,79 @@ export default function ChatDashboard() {
         setChats(prev => prev.filter(c => c.id !== activeChat.id));
         setActiveChat(null);
         setMessages([]);
-        alert("You have left the secure node.");
+        pushNotification('You have left the secure node.', 'success');
       } else {
         const err = await res.json();
-        alert(err.detail || "Failed to leave chat.");
+        pushNotification(err.detail || 'Failed to leave chat.', 'error');
       }
     } catch {
-      alert("Network failure during leave operation.");
+      pushNotification('Network failure during leave operation.', 'error');
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!activeChat || !token) return;
+
+    setConfirmationDialog({
+      title: activeChat.type === 'group' ? 'Delete this group?' : 'Delete this chat?',
+      message:
+        activeChat.type === 'group'
+          ? 'This will permanently remove the group for everyone.'
+          : 'This will permanently remove the conversation for everyone.',
+      confirmText: 'Delete chat',
+      action: 'delete_chat',
+    });
+  };
+
+  const performDeleteChat = async () => {
+    if (!activeChat || !token) return;
+
+    try {
+      const res = await authFetch(
+        apiUrl(`/api/v1/chats/${activeChat.id}`),
+        { method: 'DELETE' }
+      );
+      if (!res) return;
+
+      if (res.ok) {
+        setChats(prev => prev.filter(c => c.id !== activeChat.id));
+        setActiveChat(null);
+        setMessages([]);
+        setShowGroupSettingsModal(false);
+        pushNotification('Chat deleted.', 'success');
+      } else {
+        const err = await res.json();
+        pushNotification(err.detail || 'Failed to delete chat.', 'error');
+      }
+    } catch {
+      pushNotification('Network failure during delete operation.', 'error');
+    }
+  };
+
+  const handleConfirmDialogAction = async () => {
+    if (!confirmationDialog) return;
+
+    const currentAction = confirmationDialog.action;
+    const currentPayload = confirmationDialog.payload;
+    setConfirmationDialog(null);
+
+    if (currentAction === 'remove_group_photo') {
+      await updateGroupPhoto(null);
+      return;
+    }
+
+    if (currentAction === 'remove_member' && currentPayload?.userId !== undefined) {
+      await performRemoveMember(currentPayload.userId);
+      return;
+    }
+
+    if (currentAction === 'leave_chat') {
+      await performLeaveChat();
+      return;
+    }
+
+    if (currentAction === 'delete_chat') {
+      await performDeleteChat();
     }
   };
 
@@ -675,17 +859,67 @@ export default function ChatDashboard() {
     return otherParticipant?.user.full_name || otherParticipant?.user.email || "Unknown Agent";
   };
 
+  const getOtherParticipant = (chat: Chat) => {
+    if (chat.type !== 'private') return null;
+    return chat.participants.find((p) => p.user_id !== user?.id) ?? null;
+  };
+
+  const getChatAvatarUrl = (chat: Chat): string | null => {
+    if (chat.type === 'group') {
+      return chat.image_url || null;
+    }
+    return getOtherParticipant(chat)?.user.avatar_url || null;
+  };
+
+  const getParticipantAvatarUrl = (senderId: number): string | null => {
+    if (senderId === user?.id) {
+      return user?.avatar_url || null;
+    }
+
+    const participant = activeChat?.participants.find((p) => p.user_id === senderId);
+    return participant?.user.avatar_url || null;
+  };
+
+  const getMessageAvatarUrl = (message: Message): string | null => {
+    if (message.sender_avatar_url) {
+      return message.sender_avatar_url;
+    }
+    return getParticipantAvatarUrl(message.sender_id);
+  };
+
   const typingNames = Object.values(typingUsers);
 
   return (
-    <div className="flex h-screen w-full p-2 lg:p-6 relative overflow-hidden">
+    <div className="flex h-screen w-full relative overflow-hidden">
       {/* Background Animated Blobs */}
       <div className="fixed top-0 left-0 w-full h-full pointer-events-none mix-blend-screen opacity-20">
         <div className="absolute top-10 left-10 w-[500px] h-[500px] bg-primary/30 rounded-full filter blur-[150px] animate-blob"></div>
         <div className="absolute bottom-10 right-10 w-[600px] h-[600px] bg-secondary/30 rounded-full filter blur-[150px] animate-blob" style={{ animationDelay: '2s' }}></div>
       </div>
 
-      <div className="glass-panel w-full max-w-7xl mx-auto h-full flex flex-col md:flex-row z-10 relative overflow-hidden shadow-2xl">
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            className="fixed top-4 right-4 z-[200] max-w-sm"
+          >
+            <div
+              className={cn(
+                "rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl",
+                notification.tone === 'success' && "border-primary/30 bg-primary/10 text-white",
+                notification.tone === 'error' && "border-secondary/40 bg-secondary/10 text-white",
+                notification.tone === 'info' && "border-border bg-black/70 text-white"
+              )}
+            >
+              <p className="text-sm font-medium leading-snug">{notification.message}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="w-full h-full flex flex-col md:flex-row z-10 relative overflow-hidden">
         
         {/* SIDEBAR */}
         <div className="w-full md:w-80 border-r border-border/50 bg-[#0a0a0c]/40 backdrop-blur-3xl flex flex-col relative z-20">
@@ -693,16 +927,24 @@ export default function ChatDashboard() {
           {/* Header */}
           <div className="p-6 border-b border-border/50 flex justify-between items-center bg-black/20">
             <div>
-              <h1 className="text-2xl font-display font-bold text-gradient tracking-tighter">GLSMSG</h1>
+              <h1 className="text-2xl font-display font-bold text-gradient tracking-tighter">Wazzup</h1>
               <p className="text-[10px] text-textMuted uppercase tracking-widest mt-1">Node: {user?.username || user?.full_name || user?.email}</p>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate('/profile')}
+                onClick={() => setIsProfileModalOpen(true)}
                 className="text-textMuted hover:text-primary transition-colors"
                 title="Profile"
               >
-                <UserRoundCog className="w-5 h-5" />
+                {user?.avatar_url ? (
+                  <img
+                    src={resolveApiUrl(user.avatar_url)}
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full object-cover border border-border"
+                  />
+                ) : (
+                  <UserRoundCog className="w-5 h-5" />
+                )}
               </button>
               <button onClick={handleLogout} className="text-textMuted hover:text-secondary transition-colors" title="Disconnect">
                 <LogOut className="w-5 h-5" />
@@ -726,6 +968,7 @@ export default function ChatDashboard() {
             <AnimatePresence>
               {chats.map((chat) => {
                 const isActive = activeChat?.id === chat.id;
+                const otherParticipant = getOtherParticipant(chat);
                 return (
                   <motion.div 
                     initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
@@ -744,7 +987,23 @@ export default function ChatDashboard() {
                     )}
                   >
                     <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0 border", isActive ? "bg-primary/20 border-primary/50 text-primary" : "bg-black/50 border-border text-textMuted")}>
-                      {chat.type === 'group' ? <Hash className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
+                      {getChatAvatarUrl(chat) ? (
+                        <img
+                          src={resolveApiUrl(getChatAvatarUrl(chat) || '')}
+                          alt={getChatName(chat)}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : chat.type === 'group' ? (
+                        <Hash className="w-5 h-5" />
+                      ) : otherParticipant?.user.avatar_url ? (
+                        <img
+                          src={resolveApiUrl(otherParticipant.user.avatar_url)}
+                          alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <UserIcon className="w-5 h-5" />
+                      )}
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <h3 className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-white")}>
@@ -771,9 +1030,31 @@ export default function ChatDashboard() {
               {/* Chat Header */}
               <div className="h-20 border-b border-border/50 px-8 flex items-center justify-between bg-[#0a0a0c]/60 backdrop-blur-md sticky top-0 z-10 shadow-sm">
                 <div className="flex items-center gap-4">
+                  {(() => {
+                    const otherParticipant = getOtherParticipant(activeChat);
+                    const chatAvatarUrl = getChatAvatarUrl(activeChat);
+                    return (
                   <div className="w-12 h-12 bg-surface border border-border rounded-xl flex items-center justify-center text-white">
-                    {activeChat.type === 'group' ? <Hash className="w-6 h-6" /> : <UserIcon className="w-6 h-6" />}
+                    {chatAvatarUrl ? (
+                      <img
+                        src={resolveApiUrl(chatAvatarUrl)}
+                        alt={getChatName(activeChat)}
+                        className="w-full h-full rounded-xl object-cover"
+                      />
+                    ) : activeChat.type === 'group' ? (
+                      <Hash className="w-6 h-6" />
+                    ) : otherParticipant?.user.avatar_url ? (
+                      <img
+                        src={resolveApiUrl(otherParticipant.user.avatar_url)}
+                        alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
+                        className="w-full h-full rounded-xl object-cover"
+                      />
+                    ) : (
+                      <UserIcon className="w-6 h-6" />
+                    )}
                   </div>
+                    );
+                  })()}
                   <div>
                     <h2 className="text-xl font-display font-semibold text-white tracking-tight">{getChatName(activeChat)}</h2>
                     <p className="text-[11px] text-textMuted uppercase tracking-wider flex items-center gap-2">
@@ -799,34 +1080,23 @@ export default function ChatDashboard() {
                     <Search className="w-5 h-5" />
                   </button>
 
+                  <button
+                    onClick={handleDeleteChat}
+                    className="p-2 bg-surface border border-border rounded-xl text-textMuted hover:text-secondary hover:border-secondary/50 hover:bg-secondary/5 transition-all"
+                    title={activeChat.type === 'group' ? 'Delete group' : 'Delete chat'}
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+
                   {activeChat.type === 'group' && (
-                    <>
-                      <button
-                        onClick={() => setShowParticipantsPanel(prev => !prev)}
-                        className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
-                      >
-                        <Users className="w-4 h-4" />
-                        <span>{showParticipantsPanel ? 'Hide Operatives' : 'Show Operatives'}</span>
-                      </button>
-                      {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
-                        <button 
-                          onClick={handleAddMember}
-                          className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          <span>Add Operative</span>
-                        </button>
-                      )}
-                      {activeChat.type === 'group' && (
-                        <button 
-                          onClick={handleLeaveChat}
-                          className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-secondary/50 hover:bg-secondary/5 rounded-xl text-xs text-textMuted hover:text-secondary transition-all"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Leave</span>
-                        </button>
-                      )}
-                    </>
+                    <button 
+                      onClick={() => setShowGroupSettingsModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
+                      title="Group settings"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                      <span>Group Settings</span>
+                    </button>
                   )}
                 </div>
               </div>
@@ -862,9 +1132,22 @@ export default function ChatDashboard() {
                               onClick={() => handleJumpToMessage(result.id)}
                               className="p-3 bg-surface/50 border border-border/30 rounded-xl hover:bg-primary/5 hover:border-primary/20 transition-all cursor-pointer group"
                             >
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{result.sender_name}</span>
-                                <span className="text-[9px] text-textMuted opacity-50">
+                              <div className="flex items-start justify-between mb-1 gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-6 h-6 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
+                                    {getMessageAvatarUrl(result) ? (
+                                      <img
+                                        src={resolveApiUrl(getMessageAvatarUrl(result) || '')}
+                                        alt={result.sender_name || 'User avatar'}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <UserIcon className="w-3.5 h-3.5" />
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest truncate">{result.sender_name}</span>
+                                </div>
+                                <span className="text-[9px] text-textMuted opacity-50 shrink-0">
                                   {new Date(result.timestamp).toLocaleDateString()}
                                 </span>
                               </div>
@@ -893,17 +1176,32 @@ export default function ChatDashboard() {
                         <Loader2 className="w-8 h-8 text-primary animate-spin" />
                       </div>
                     ) : (
-                      messages.map((msg, idx) => {
+                      messages.map((msg) => {
                         const isMe = msg.sender_id === user?.id;
+                        const avatarUrl = getMessageAvatarUrl(msg);
                         return (
                           <motion.div
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            key={idx}
+                            key={msg.id}
                             id={`msg-${msg.id}`}
                             onContextMenu={(e) => handleContextMenu(e, msg)}
-                            className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}
+                            className={cn("flex w-full items-end gap-2", isMe ? "justify-end" : "justify-start")}
                           >
+                            {!isMe && (
+                              <div className="w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
+                                {avatarUrl ? (
+                                  <img
+                                    src={resolveApiUrl(avatarUrl)}
+                                    alt={msg.sender_name || 'User avatar'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <UserIcon className="w-4 h-4" />
+                                )}
+                              </div>
+                            )}
+
                             <div
                               className={cn(
                                 "max-w-[75%] lg:max-w-[50%] p-4 rounded-2xl relative shadow-lg overflow-hidden transition-all duration-500",
@@ -1005,6 +1303,20 @@ export default function ChatDashboard() {
                                 })}
                               </div>
                             </div>
+
+                            {isMe && (
+                              <div className="w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
+                                {avatarUrl ? (
+                                  <img
+                                    src={resolveApiUrl(avatarUrl)}
+                                    alt={msg.sender_name || 'User avatar'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <UserIcon className="w-4 h-4" />
+                                )}
+                              </div>
+                            )}
                           </motion.div>
                         );
                       })
@@ -1033,7 +1345,7 @@ export default function ChatDashboard() {
                   {/* Message Input */}
                   <div className="p-6 bg-[#0a0a0c]/60 backdrop-blur-xl border-t border-border/50">
                     {editingMessage && (
-                      <div className="max-w-4xl mx-auto mb-3 flex items-center justify-between px-4 py-2 bg-primary/10 border border-primary/30 rounded-xl">
+                      <div className="mb-3 flex w-full items-center justify-between px-4 py-2 bg-primary/10 border border-primary/30 rounded-xl">
                         <div className="flex items-center gap-2 text-primary">
                           <Edit3 className="w-4 h-4" />
                           <span className="text-xs font-bold uppercase tracking-widest">Editing Signal Intercept</span>
@@ -1043,7 +1355,7 @@ export default function ChatDashboard() {
                         </button>
                       </div>
                     )}
-                    <form onSubmit={handleSend} className="relative flex items-center max-w-4xl mx-auto gap-4">
+                    <form onSubmit={handleSend} className="relative flex w-full items-center gap-4">
                   
                   {/* Media Upload Buttons */}
                   <div className="flex items-center gap-2">
@@ -1175,7 +1487,13 @@ export default function ChatDashboard() {
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                                  {isAdmin ? (
+                                  {participant.user.avatar_url ? (
+                                    <img
+                                      src={resolveApiUrl(participant.user.avatar_url)}
+                                      alt={participant.user.full_name || participant.user.email || 'User avatar'}
+                                      className="w-full h-full rounded-full object-cover"
+                                    />
+                                  ) : isAdmin ? (
                                     <Crown className="w-4 h-4 text-primary" />
                                   ) : (
                                     <UserIcon className="w-4 h-4 text-textMuted" />
@@ -1254,6 +1572,218 @@ export default function ChatDashboard() {
         onClose={() => setIsCreateModalOpen(false)} 
         onChatCreated={handleChatCreated}
       />
+
+      <Profile
+        isOpen={isProfileModalOpen}
+        onClose={closeProfileModal}
+      />
+
+      <AnimatePresence>
+        {confirmationDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+          >
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setConfirmationDialog(null)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative z-10 w-full max-w-md rounded-3xl border border-border/50 bg-[#0a0a0c]/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-border/50 bg-black/20">
+                <h3 className="text-xl font-display font-bold text-white tracking-tight">{confirmationDialog.title}</h3>
+                <p className="text-sm text-textMuted mt-2">{confirmationDialog.message}</p>
+              </div>
+
+              <div className="p-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmationDialog(null)}
+                  className="px-4 py-2 rounded-xl border border-border bg-surface text-sm text-textMuted hover:text-white hover:border-border/80 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmDialogAction()}
+                  className="px-4 py-2 rounded-xl border border-secondary/30 bg-secondary/10 text-sm text-secondary hover:bg-secondary/20 hover:border-secondary/50 transition-all"
+                >
+                  {confirmationDialog.confirmText}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {activeChat && activeChat.type === 'group' && showGroupSettingsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+          >
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setShowGroupSettingsModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 18 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 18 }}
+              className="relative z-10 w-full max-w-xl rounded-3xl border border-border/50 bg-[#0a0a0c]/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-border/50 flex items-center justify-between bg-black/20">
+                <div>
+                  <h3 className="text-2xl font-display font-bold text-white tracking-tight">Group Settings</h3>
+                  <p className="text-xs uppercase tracking-widest text-textMuted mt-1">Manage photo and members</p>
+                </div>
+                <button
+                  onClick={() => setShowGroupSettingsModal(false)}
+                  className="text-textMuted hover:text-white transition-colors"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
+                  <input
+                    ref={groupPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        void handleGroupPhotoUpload(file);
+                      }
+                    }}
+                  />
+                )}
+
+                <div className="flex flex-col items-center gap-4 pb-6 border-b border-border/50">
+                  <div className="relative group">
+                    <div
+                      className={cn(
+                        "w-32 h-32 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-surface transition-all",
+                        activeChat.image_url && "border-solid border-primary/30 shadow-[0_0_20px_rgba(212,255,0,0.1)]",
+                        !activeChat.image_url && activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && "group-hover:border-primary/50"
+                      )}
+                    >
+                      {activeChat.image_url ? (
+                        <img
+                          src={resolveApiUrl(activeChat.image_url)}
+                          alt={getChatName(activeChat)}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="w-12 h-12 text-textMuted" />
+                      )}
+                    </div>
+
+                    {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => groupPhotoInputRef.current?.click()}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-all rounded-full"
+                        title={activeChat.image_url ? 'Change group photo' : 'Add group photo'}
+                      >
+                        <Upload className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Change</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-lg font-semibold text-white">{getChatName(activeChat)}</p>
+                    <p className="text-xs text-textMuted mt-1">Group avatar and identity</p>
+                  </div>
+
+                  {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && activeChat.image_url && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveGroupPhoto}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-secondary/30 bg-secondary/10 text-sm text-secondary hover:bg-secondary/20 transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remove Photo
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleParticipantsPanel}
+                  className="w-full flex items-center justify-between rounded-2xl border border-border/50 bg-surface/60 px-4 py-4 text-left hover:border-primary/30 hover:bg-primary/5 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{showParticipantsPanel ? 'Hide participants' : 'Show participants'}</p>
+                      <p className="text-xs text-textMuted">Open or hide the members panel.</p>
+                    </div>
+                  </div>
+                </button>
+
+                {activeChat.participants.find(p => p.user_id === user?.id)?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={openAddMembers}
+                    className="w-full flex items-center justify-between rounded-2xl border border-border/50 bg-surface/60 px-4 py-4 text-left hover:border-primary/30 hover:bg-primary/5 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                        <UserPlus className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">Add members</p>
+                        <p className="text-xs text-textMuted">Invite new people to this group.</p>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleLeaveChat}
+                  className="w-full flex items-center justify-between rounded-2xl border border-secondary/30 bg-secondary/10 px-4 py-4 text-left hover:border-secondary/50 hover:bg-secondary/20 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-secondary/15 border border-secondary/20 flex items-center justify-center text-secondary">
+                      <LogOut className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">Leave group</p>
+                      <p className="text-xs text-textMuted">Exit this chat.</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {activeChat && (
+        <AddMemberModal
+          isOpen={isAddMemberModalOpen}
+          onClose={() => setIsAddMemberModalOpen(false)}
+          chatId={activeChat.id}
+          onMembersAdded={handleMembersAdded}
+          existingParticipantIds={activeChat.participants.map(p => p.user_id)}
+        />
+      )}
 
       {/* Context Menu */}
       <AnimatePresence>
