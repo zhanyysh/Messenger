@@ -17,3 +17,4 @@ mypy
 ruff
 pydantic-settings
 python-dotenv
+cloudinary
