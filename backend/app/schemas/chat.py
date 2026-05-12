@@ -29,10 +29,16 @@ class ChatParticipantResponse(ChatParticipantBase):
 class ChatBase(BaseModel):
     type: ChatType
     name: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class ChatCreate(ChatBase):
     participant_emails: List[str]  # Emails of users to add to the chat
+
+
+class ChatUpdate(BaseModel):
+    name: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class ChatResponse(ChatBase):

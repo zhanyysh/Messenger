@@ -1,6 +1,6 @@
-# GLSMSG System Design
+# Wazzup System Design
 
-This document details the architecture, data models, and communication protocols for the GLSMSG Telegram-like Messenger MVP.
+This document details the architecture, data models, and communication protocols for the Wazzup Telegram-like Messenger MVP.
 
 ## 1. High-Level Architecture
 

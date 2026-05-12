@@ -20,7 +20,7 @@ async def get_by_username(db: AsyncSession, username: str) -> Optional[User]:
 
 
 async def search_users(
-    db: AsyncSession, *, query: str, limit: int = 10, current_user_id: int
+    db: AsyncSession, *, query: str, limit: int = 20, current_user_id: int
 ) -> List[User]:
     stmt = (
         select(User)

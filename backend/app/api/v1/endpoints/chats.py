@@ -10,6 +10,7 @@ from app.schemas.chat import (
     ChatParticipantResponse,
     ChatParticipantUpdate,
     ChatResponse,
+    ChatUpdate,
 )
 from app.schemas.message import MessageResponse
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -49,6 +50,29 @@ async def read_chats(
         setattr(chat, "unread_count", unread_count)
 
     return chats
+
+
+@router.patch("/{chat_id}", response_model=ChatResponse)
+async def update_chat(
+    chat_id: int,
+    chat_in: ChatUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    is_admin = any(
+        p.user_id == current_user.id and p.role == ParticipantRole.ADMIN
+        for p in chat.participants
+    )
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    updated_chat = await crud_chat.update_chat(db, db_obj=chat, obj_in=chat_in)
+    setattr(updated_chat, "unread_count", await crud_chat.get_unread_count(db, chat_id, current_user.id))
+    return updated_chat
 
 
 @router.get("/{chat_id}/messages", response_model=List[MessageResponse])
@@ -247,6 +271,32 @@ async def leave_chat(
 
     await crud_chat.remove_participant(db, chat_id=chat_id, user_id=current_user.id)
     return {"status": "left chat"}
+
+
+@router.delete("/{chat_id}")
+async def delete_chat(
+    chat_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    if not any(p.user_id == current_user.id for p in chat.participants):
+        raise HTTPException(status_code=403, detail="Not a participant of this chat")
+
+    if chat.type == "group":
+        is_admin = any(
+            p.user_id == current_user.id and p.role == ParticipantRole.ADMIN
+            for p in chat.participants
+        )
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only admins can delete this group")
+
+    await db.delete(chat)
+    await db.commit()
+    return {"status": "chat deleted"}
 
 
 @router.get("/{chat_id}/search", response_model=List[MessageResponse])

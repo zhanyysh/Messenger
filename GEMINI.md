@@ -1,8 +1,8 @@
-# GLSMSG Workspace Context
+# Wazzup Workspace Context
 
 ## Project Overview
 
-GLSMSG is a Telegram-like Messenger MVP built as a responsive web application. It provides robust 1:1 and group chatting, real-time messaging using WebSockets, and rich media/voice notes sharing capabilities. 
+Wazzup is a Telegram-like Messenger MVP built as a responsive web application. It provides robust 1:1 and group chatting, real-time messaging using WebSockets, and rich media/voice notes sharing capabilities. 
 
 ### Technology Stack
 

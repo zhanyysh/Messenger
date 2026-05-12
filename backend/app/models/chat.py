@@ -22,6 +22,7 @@ class Chat(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(SQLEnum(ChatType), nullable=False)
     name = Column(String, nullable=True)  # Populated if it's a group chat
+    image_url = Column(String, nullable=True)
     created_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )

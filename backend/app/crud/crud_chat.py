@@ -4,7 +4,7 @@ from typing import List, Optional
 from app.models.chat import Chat, ChatParticipant, ChatType, ParticipantRole
 from app.models.message import Message
 from app.models.user import User
-from app.schemas.chat import ChatCreate
+from app.schemas.chat import ChatCreate, ChatUpdate
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 
 async def create_chat(db: AsyncSession, obj_in: ChatCreate, current_user: User) -> Chat:
-    db_chat = Chat(type=obj_in.type, name=obj_in.name)
+    db_chat = Chat(type=obj_in.type, name=obj_in.name, image_url=obj_in.image_url)
     db.add(db_chat)
     await db.flush()  # To get db_chat.id
 
@@ -63,6 +63,22 @@ async def get_chat(db: AsyncSession, chat_id: int) -> Optional[Chat]:
     )
     result = await db.execute(stmt)
     return result.scalars().first()
+
+
+async def update_chat(
+    db: AsyncSession,
+    *,
+    db_obj: Chat,
+    obj_in: ChatUpdate,
+) -> Chat:
+    if obj_in.name is not None:
+        db_obj.name = obj_in.name.strip() or None
+    if obj_in.image_url is not None:
+        db_obj.image_url = obj_in.image_url.strip() or None
+
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj
 
 
 async def add_chat_member(
