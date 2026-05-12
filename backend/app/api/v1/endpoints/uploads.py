@@ -14,15 +14,24 @@ router = APIRouter()
 
 
 def configure_cloudinary():
-    if not settings.CLOUDINARY_CLOUD_NAME or not settings.CLOUDINARY_API_KEY or not settings.CLOUDINARY_API_SECRET:
-        return False
-    cloudinary.config(
-        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-        api_key=settings.CLOUDINARY_API_KEY,
-        api_secret=settings.CLOUDINARY_API_SECRET,
-        secure=True,
-    )
-    return True
+    # Support either full CLOUDINARY_URL or individual settings
+    if settings.CLOUDINARY_URL:
+        try:
+            cloudinary.config(cloudinary_url=settings.CLOUDINARY_URL)
+            return True
+        except Exception:
+            return False
+
+    if settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET:
+        cloudinary.config(
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
+            secure=True,
+        )
+        return True
+
+    return False
 
 
 @router.post("/", response_model=MediaResponse)

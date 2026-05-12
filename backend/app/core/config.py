@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
     CLOUDINARY_UPLOAD_FOLDER: Optional[str] = None
+    # Full Cloudinary URL (e.g. cloudinary://key:secret@cloudname)
+    CLOUDINARY_URL: Optional[str] = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
