@@ -71,7 +71,11 @@ async def update_chat(
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     updated_chat = await crud_chat.update_chat(db, db_obj=chat, obj_in=chat_in)
-    setattr(updated_chat, "unread_count", await crud_chat.get_unread_count(db, chat_id, current_user.id))
+    setattr(
+        updated_chat,
+        "unread_count",
+        await crud_chat.get_unread_count(db, chat_id, current_user.id),
+    )
     return updated_chat
 
 
@@ -292,7 +296,9 @@ async def delete_chat(
             for p in chat.participants
         )
         if not is_admin:
-            raise HTTPException(status_code=403, detail="Only admins can delete this group")
+            raise HTTPException(
+                status_code=403, detail="Only admins can delete this group"
+            )
 
     await db.delete(chat)
     await db.commit()
@@ -320,7 +326,9 @@ async def search_chat_messages(
     return messages
 
 
-@router.get("/{chat_id}/messages/{message_id}/context", response_model=List[MessageResponse])
+@router.get(
+    "/{chat_id}/messages/{message_id}/context", response_model=List[MessageResponse]
+)
 async def read_message_context(
     chat_id: int,
     message_id: int,

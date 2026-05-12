@@ -86,7 +86,7 @@ async def get_messages_around_id(
     Fetch messages surrounding a specific message ID to provide context when jumping from search.
     """
     half_limit = limit // 2
-    
+
     # Fetch messages before and including the target
     stmt_before = (
         select(Message)
@@ -96,7 +96,7 @@ async def get_messages_around_id(
         .order_by(Message.timestamp.desc())
         .limit(half_limit)
     )
-    
+
     # Fetch messages after the target
     stmt_after = (
         select(Message)
@@ -106,13 +106,13 @@ async def get_messages_around_id(
         .order_by(Message.timestamp.asc())
         .limit(half_limit)
     )
-    
+
     res_before = await db.execute(stmt_before)
     res_after = await db.execute(stmt_after)
-    
+
     messages_before = list(res_before.scalars().all())
     messages_after = list(res_after.scalars().all())
-    
+
     # Combine and sort by timestamp
     combined = messages_before + messages_after
     combined.sort(key=lambda x: x.timestamp)

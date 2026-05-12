@@ -85,13 +85,13 @@ async def websocket_endpoint(
                     new_content = msg_data.get("content")
                     if not message_id or not new_content:
                         continue
-                    
+
                     db_msg = await crud_message.get_message(db, message_id)
                     if not db_msg or db_msg.sender_id != user.id:
                         continue
-                    
+
                     await crud_message.update_message(db, db_msg, new_content)
-                    
+
                     edit_payload = {
                         "event": "edit_message",
                         "id": message_id,
@@ -106,13 +106,13 @@ async def websocket_endpoint(
                     message_id = msg_data.get("message_id")
                     if not message_id:
                         continue
-                    
+
                     db_msg = await crud_message.get_message(db, message_id)
                     if not db_msg or db_msg.sender_id != user.id:
                         continue
-                    
+
                     await crud_message.delete_message(db, db_msg)
-                    
+
                     delete_payload = {
                         "event": "delete_message",
                         "id": message_id,
