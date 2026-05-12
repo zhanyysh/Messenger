@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { apiUrl, resolveApiUrl, wsUrl } from '../lib/api';
@@ -34,6 +34,13 @@ interface Message {
   sender_id: number;
   sender_name: string;
   timestamp: string;
+  is_edited?: boolean;
+}
+
+interface ContextMenu {
+  x: number;
+  y: number;
+  messageId: number;
 }
 
 interface HistoryMessageApi {
@@ -69,6 +76,13 @@ export default function ChatDashboard() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -253,6 +267,16 @@ export default function ChatDashboard() {
           return;
         }
 
+        if (data.event === 'edit_message') {
+          setMessages(prev => prev.map(m => m.id === data.id ? { ...m, content: data.content, is_edited: true } : m));
+          return;
+        }
+
+        if (data.event === 'delete_message') {
+          setMessages(prev => prev.filter(m => m.id !== data.id));
+          return;
+        }
+
         setMessages(prev => [...prev, data]);
         if (data.sender_id) {
           setTypingUsers(prev => {
@@ -287,13 +311,123 @@ export default function ChatDashboard() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (wsRef.current && newMessage.trim()) {
-      wsRef.current.send(
-        JSON.stringify({ event: 'message', content: newMessage, type: 'text' })
-      );
+      if (editingMessage) {
+        wsRef.current.send(
+          JSON.stringify({ event: 'edit_message', message_id: editingMessage.id, content: newMessage })
+        );
+        setEditingMessage(null);
+      } else {
+        wsRef.current.send(
+          JSON.stringify({ event: 'message', content: newMessage, type: 'text' })
+        );
+      }
       setNewMessage('');
       stopTyping();
     }
   };
+
+  const handleContextMenu = (e: React.MouseEvent, message: Message) => {
+    if (message.sender_id !== user?.id || message.type !== 'text') return;
+    e.preventDefault();
+    setContextMenu({
+      x: e.pageX,
+      y: e.pageY,
+      messageId: message.id
+    });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  const startEdit = (message: Message) => {
+    setEditingMessage(message);
+    setNewMessage(message.content);
+    closeContextMenu();
+  };
+
+  const deleteMessage = (messageId: number) => {
+    if (wsRef.current) {
+      wsRef.current.send(
+        JSON.stringify({ event: 'delete_message', message_id: messageId })
+      );
+    }
+    closeContextMenu();
+  };
+
+  const handleJumpToMessage = async (messageId: number) => {
+    if (!activeChat) return;
+    
+    // Check if message is already in our current messages state
+    const existingIndex = messages.findIndex(m => m.id === messageId);
+    
+    if (existingIndex === -1) {
+      // Not in current list, fetch context around this message
+      setLoadingHistory(true);
+      try {
+        const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/messages/${messageId}/context`));
+        if (res && res.ok) {
+          const data: HistoryMessageApi[] = await res.json();
+          const history: Message[] = data.map((d) => ({
+            id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
+            type: d.type,
+            sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
+          }));
+          setMessages(history);
+        }
+      } catch (err) {
+        console.error("Failed to fetch context", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+
+    // Close search
+    setShowSearch(false);
+    
+    // Scroll and highlight
+    setTimeout(() => {
+      const element = document.getElementById(`msg-${messageId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+        setTimeout(() => setHighlightedMessageId(null), 2500);
+      }
+    }, 100);
+  };
+
+  useEffect(() => {
+    const handleClick = () => closeContextMenu();
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (!showSearch || !searchQuery.trim() || !activeChat) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/search?query=${encodeURIComponent(searchQuery)}`));
+        if (res && res.ok) {
+          const data: HistoryMessageApi[] = await res.json();
+          const mapped: Message[] = data.map(d => ({
+            id: d.id, content: d.content, sender_id: d.sender_id, timestamp: d.timestamp,
+            type: d.type,
+            sender_name: d.sender?.full_name || d.sender?.email || "Unknown"
+          }));
+          setSearchResults(mapped);
+        }
+      } catch (err) {
+        console.error("Search failed", err);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeChat, showSearch, authFetch]);
 
   const handleChatCreated = (newChat: Chat) => {
     const normalizedChat = { ...newChat, unread_count: newChat.unread_count ?? 0 };
@@ -651,6 +785,20 @@ export default function ChatDashboard() {
 
                 {/* Group Admin Actions */}
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowSearch(!showSearch);
+                      if (!showSearch) setSearchQuery('');
+                    }}
+                    className={cn(
+                      "p-2 bg-surface border border-border rounded-xl text-textMuted hover:text-primary transition-all",
+                      showSearch && "border-primary/50 text-primary bg-primary/5"
+                    )}
+                    title="Search Messages"
+                  >
+                    <Search className="w-5 h-5" />
+                  </button>
+
                   {activeChat.type === 'group' && (
                     <>
                       <button
@@ -683,6 +831,57 @@ export default function ChatDashboard() {
                 </div>
               </div>
 
+              {/* Search Bar Overlay */}
+              <AnimatePresence>
+                {showSearch && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-border/50 bg-[#0a0a0c]/80 backdrop-blur-xl overflow-hidden"
+                  >
+                    <div className="p-4 max-w-4xl mx-auto space-y-4">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted" />
+                        <input
+                          autoFocus
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search in conversation..."
+                          className="w-full bg-surface border border-border rounded-xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary/50"
+                        />
+                        {searching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />}
+                      </div>
+
+                      {searchResults.length > 0 && (
+                        <div className="max-h-60 overflow-y-auto space-y-2 pb-2 custom-scrollbar">
+                          {searchResults.map((result) => (
+                            <div 
+                              key={result.id}
+                              onClick={() => handleJumpToMessage(result.id)}
+                              className="p-3 bg-surface/50 border border-border/30 rounded-xl hover:bg-primary/5 hover:border-primary/20 transition-all cursor-pointer group"
+                            >
+                              <div className="flex justify-between items-start mb-1">
+                                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{result.sender_name}</span>
+                                <span className="text-[9px] text-textMuted opacity-50">
+                                  {new Date(result.timestamp).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="text-xs text-white line-clamp-2">{result.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {searchQuery.trim() && !searching && searchResults.length === 0 && (
+                        <div className="text-center py-4 text-textMuted text-sm italic">No matching signals found in this intercept.</div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Messages Area and Participants */}
               <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0 overflow-hidden">
                 {/* Messages Column */}
@@ -701,14 +900,17 @@ export default function ChatDashboard() {
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             key={idx}
+                            id={`msg-${msg.id}`}
+                            onContextMenu={(e) => handleContextMenu(e, msg)}
                             className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}
                           >
                             <div
                               className={cn(
-                                "max-w-[75%] lg:max-w-[50%] p-4 rounded-2xl relative shadow-lg overflow-hidden",
+                                "max-w-[75%] lg:max-w-[50%] p-4 rounded-2xl relative shadow-lg overflow-hidden transition-all duration-500",
                                 isMe
                                   ? "bg-primary text-black rounded-tr-sm"
-                                  : "bg-surface border border-border text-white rounded-tl-sm backdrop-blur-md"
+                                  : "bg-surface border border-border text-white rounded-tl-sm backdrop-blur-md",
+                                highlightedMessageId === msg.id && "ring-4 ring-primary ring-offset-4 ring-offset-black scale-105 z-50 shadow-[0_0_30px_rgba(212,255,0,0.4)]"
                               )}
                             >
                               {!isMe && (
@@ -719,7 +921,12 @@ export default function ChatDashboard() {
 
                               {/* Rich Media Rendering */}
                               {msg.type === 'text' && (
-                                <p className="leading-relaxed font-sans text-[15px]">{msg.content}</p>
+                                <div className="flex flex-col">
+                                  <p className="leading-relaxed font-sans text-[15px]">{msg.content}</p>
+                                  {msg.is_edited && (
+                                    <span className="text-[9px] opacity-40 mt-1 italic text-right">edited</span>
+                                  )}
+                                </div>
                               )}
 
                               {msg.type === 'image' && (
@@ -825,6 +1032,17 @@ export default function ChatDashboard() {
 
                   {/* Message Input */}
                   <div className="p-6 bg-[#0a0a0c]/60 backdrop-blur-xl border-t border-border/50">
+                    {editingMessage && (
+                      <div className="max-w-4xl mx-auto mb-3 flex items-center justify-between px-4 py-2 bg-primary/10 border border-primary/30 rounded-xl">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Edit3 className="w-4 h-4" />
+                          <span className="text-xs font-bold uppercase tracking-widest">Editing Signal Intercept</span>
+                        </div>
+                        <button onClick={() => { setEditingMessage(null); setNewMessage(''); }} className="text-textMuted hover:text-white">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                     <form onSubmit={handleSend} className="relative flex items-center max-w-4xl mx-auto gap-4">
                   
                   {/* Media Upload Buttons */}
@@ -908,8 +1126,11 @@ export default function ChatDashboard() {
                           value={newMessage}
                           onChange={handleMessageInputChange}
                           onBlur={stopTyping}
-                          placeholder="Broadcast intercept..."
-                          className="w-full bg-surface border border-border rounded-2xl py-4 pl-16 pr-16 text-white placeholder-textMuted/40 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all font-sans"
+                          placeholder={editingMessage ? "Updating broadcast..." : "Broadcast intercept..."}
+                          className={cn(
+                            "w-full bg-surface border rounded-2xl py-4 pl-16 pr-16 text-white placeholder-textMuted/40 focus:outline-none transition-all font-sans",
+                            editingMessage ? "border-primary/50 ring-1 ring-primary/30" : "border-border focus:ring-1 focus:ring-primary/50"
+                          )}
                           autoComplete="off"
                         />
                         <button 
@@ -1033,6 +1254,38 @@ export default function ChatDashboard() {
         onClose={() => setIsCreateModalOpen(false)} 
         onChatCreated={handleChatCreated}
       />
+
+      {/* Context Menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className="fixed z-[100] min-w-[160px] bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1.5"
+          >
+            <button
+              onClick={() => {
+                const msg = messages.find(m => m.id === contextMenu.messageId);
+                if (msg) startEdit(msg);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-primary hover:bg-white/5 transition-all text-left"
+            >
+              <Edit3 className="w-4 h-4" />
+              <span>Edit Message</span>
+            </button>
+            <div className="h-px bg-white/5 my-1 mx-1" />
+            <button
+              onClick={() => deleteMessage(contextMenu.messageId)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-secondary hover:bg-secondary/5 transition-all text-left"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Securely</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -12,7 +12,7 @@ from app.schemas.chat import (
     ChatResponse,
 )
 from app.schemas.message import MessageResponse
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
@@ -247,3 +247,48 @@ async def leave_chat(
 
     await crud_chat.remove_participant(db, chat_id=chat_id, user_id=current_user.id)
     return {"status": "left chat"}
+
+
+@router.get("/{chat_id}/search", response_model=List[MessageResponse])
+async def search_chat_messages(
+    chat_id: int,
+    query: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Search messages within a specific chat.
+    """
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    if not any(p.user_id == current_user.id for p in chat.participants):
+        raise HTTPException(status_code=403, detail="Not a participant of this chat")
+
+    messages = await crud_message.search_messages(db=db, chat_id=chat_id, query=query)
+    return messages
+
+
+@router.get("/{chat_id}/messages/{message_id}/context", response_model=List[MessageResponse])
+async def read_message_context(
+    chat_id: int,
+    message_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Retrieve message history surrounding a specific message ID.
+    Used for jumping to a message from search.
+    """
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    if not any(p.user_id == current_user.id for p in chat.participants):
+        raise HTTPException(status_code=403, detail="Not a participant of this chat")
+
+    messages = await crud_message.get_messages_around_id(
+        db=db, chat_id=chat_id, message_id=message_id
+    )
+    return messages

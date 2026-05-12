@@ -45,12 +45,28 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app
       - ./backend/uploads:/app/uploads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000
+        - VITE_WS_BASE_URL=ws://localhost:8000
+    container_name: glsmsg-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

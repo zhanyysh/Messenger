@@ -2,7 +2,7 @@ import enum
 from datetime import datetime, timezone
 
 from app.db.base_class import Base
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -25,6 +25,7 @@ class Message(Base):
     )
     content = Column(Text, nullable=True)  # Text content or file URL
     type = Column(SQLEnum(MessageType), default=MessageType.TEXT, nullable=False)
+    is_edited = Column(Boolean(), default=False)
     timestamp = Column(
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

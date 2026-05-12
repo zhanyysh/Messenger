@@ -19,6 +19,7 @@ class MessageResponse(MessageBase):
     id: int
     chat_id: int
     sender_id: int
+    is_edited: bool = False
     timestamp: datetime
     sender: User
 
