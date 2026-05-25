@@ -65,6 +65,37 @@ async def _seed_user_and_chat(db_session: AsyncSession):
     return user, chat
 
 
+async def _seed_chat_with_two_users(db_session: AsyncSession):
+    member = User(
+        email="ws_member@example.com",
+        hashed_password="hash",
+        full_name="Chat Member",
+    )
+    intruder = User(
+        email="ws_intruder@example.com",
+        hashed_password="hash",
+        full_name="Intruder",
+    )
+    db_session.add_all([member, intruder])
+    await db_session.flush()
+
+    chat = Chat(type=ChatType.GROUP, name="Secure Room")
+    db_session.add(chat)
+    await db_session.flush()
+
+    db_session.add(
+        ChatParticipant(
+            chat_id=chat.id,
+            user_id=member.id,
+            role=ParticipantRole.ADMIN,
+            joined_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+    )
+    await db_session.commit()
+
+    return member, intruder, chat
+
+
 @pytest.mark.asyncio
 async def test_typing_event_broadcasts_and_does_not_persist_message(
     db_session: AsyncSession, monkeypatch
@@ -135,3 +166,32 @@ async def test_message_event_persists_and_broadcasts_message_payload(
     messages = result.scalars().all()
     assert len(messages) == 1
     assert messages[0].content == "hello over ws"
+
+
+@pytest.mark.asyncio
+async def test_websocket_rejects_non_participant_user(
+    db_session: AsyncSession, monkeypatch
+):
+    member, intruder, chat = await _seed_chat_with_two_users(db_session)
+
+    async def fake_get_current_user(token: str, db: AsyncSession):
+        return intruder
+
+    monkeypatch.setattr(deps, "get_current_user", fake_get_current_user)
+    manager.active_connections.clear()
+
+    ws = FakeWebSocket(
+        token="fake-token",
+        incoming_messages=[json.dumps({"event": "message", "content": "should not persist"})],
+    )
+
+    await websocket_endpoint(ws, chat.id, db_session)
+
+    assert ws._accepted is False
+    assert ws.sent_texts == []
+    assert chat.id not in manager.active_connections
+
+    result = await db_session.execute(
+        select(Message).filter(Message.chat_id == chat.id)
+    )
+    assert result.scalars().all() == []

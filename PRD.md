@@ -4,7 +4,7 @@
 Users require a modern, reliable, and feature-rich web-based messaging platform that mimics the core utility of Telegram. Existing solutions may be too complex, platform-locked, or lack specific desired features. The goal is to provide a seamless communication tool for individuals and groups that supports text, rich media, and voice notes with robust administrative controls.
 
 ## Solution
-We will build a responsive web application using **React** for the frontend and **FastAPI (Python)** for the backend. The system will utilize **PostgreSQL** for persistent storage and **WebSockets** for real-time bi-directional communication. The MVP will focus on a polished user experience for 1:1 and group chats, media sharing (images, files, voice notes), and group administration, hosted initially with local file storage designed for easy migration to cloud solutions.
+We will build a responsive web application using **React** for the frontend and **FastAPI (Python)** for the backend. The system will utilize **PostgreSQL** for persistent storage and **WebSockets** for real-time bi-directional communication. The MVP will focus on a polished user experience for 1:1 and group chats, media sharing (images, files, voice notes), and group administration, with media uploads stored in Cloudinary.
 
 ## User Stories
 
@@ -55,9 +55,9 @@ We will build a responsive web application using **React** for the frontend and 
     - `ChatParticipants` (chat_id, user_id, role [admin/member])
 
 ### File Storage
-- **Strategy:** Abstracted `FileStorageService`.
-- **MVP Implementation:** `LocalFileStorage` - saves files to a mounted volume/directory on the server (`/media/uploads/`).
-- **Future Proofing:** Interface designed to easily swap in `S3FileStorage` later without changing business logic.
+- **Strategy:** Cloudinary-backed upload pipeline exposed through the API.
+- **MVP Implementation:** Files are uploaded via the backend and stored in Cloudinary; the API returns a public URL for use in chat messages and group avatars.
+- **Future Proofing:** The upload flow should remain isolated behind a service boundary so the storage provider can be swapped later if needed.
 
 ### Authentication
 - **Method:** OAuth2 Password Flow (Standard for FastAPI).
@@ -87,5 +87,5 @@ We will build a responsive web application using **React** for the frontend and 
 - **Complex Search:** Full-text search engine (Elasticsearch) is out of scope; basic SQL `LIKE` queries will suffice for MVP.
 
 ## Further Notes
-- **Voice Notes:** Will use the MediaRecorder API in the browser to capture audio (likely `.webm` or `.ogg`) and upload as a file to the backend.
+- **Voice Notes:** Will use the MediaRecorder API in the browser to capture audio (likely `.webm` or `.ogg`) and upload as a file through the backend into Cloudinary.
 - **Design:** Clean, minimalist interface inspired by Telegram Web. Dark mode support should be considered from the start (via Tailwind `dark:` classes).

@@ -2,6 +2,7 @@ import json
 from typing import Dict, List
 
 from app.api import deps
+from app.crud import crud_chat
 from app.crud import crud_message
 from app.models.message import MessageType
 from app.schemas.message import MessageCreate
@@ -56,6 +57,11 @@ async def websocket_endpoint(
                 {"sender_name": "System", "content": f"Auth failed! Details: {repr(e)}"}
             )
         )
+        await websocket.close(code=1008)
+        return
+
+    chat = await crud_chat.get_chat(db, chat_id=chat_id)
+    if not chat or not any(participant.user_id == user.id for participant in chat.participants):
         await websocket.close(code=1008)
         return
 
