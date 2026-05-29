@@ -76,7 +76,7 @@ export default function Login() {
           <h1 className="text-5xl font-display font-bold tracking-tighter mb-3">
             Wazz<span className="text-gradient">up</span>
           </h1>
-          <p className="text-textMuted font-sans text-lg tracking-wide">Enter the grid.</p>
+          <p className="text-textMuted font-sans text-lg tracking-wide">Sign in to your account</p>
         </div>
 
         {error && (
@@ -87,30 +87,30 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Identifier (Email or Username)</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Email or Username</label>
             <div className="relative group">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
+              <Mail className="pointer-events-none absolute left-4 top-1/2 z-20 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
                 type="text" 
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
-                placeholder="operative@network.local or agent_zero"
+                className="relative z-10 w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
+                placeholder="email@example.com or username"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Passphrase</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Password</label>
             <div className="relative group">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
+              <Lock className="pointer-events-none absolute left-4 top-1/2 z-20 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
                 type="password" 
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
+                className="relative z-10 w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
                 placeholder="••••••••••••"
               />
             </div>
@@ -121,13 +121,13 @@ export default function Login() {
             disabled={loading}
             className="w-full btn-primary flex items-center justify-center gap-2 mt-10 text-lg group tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Authenticating Object...' : 'Access Terminal'}
+            {loading ? 'Authenticating User...' : 'Sign in'}
             {!loading && <LogIn className="w-5 h-5 transition-transform group-hover:translate-x-1" />}
           </button>
         </form>
 
         <div className="mt-8 text-center text-sm text-textMuted tracking-wide">
-          Unregistered node? <Link to="/register" className="text-white hover:text-primary transition-colors underline decoration-border hover:decoration-primary underline-offset-4">Establish connection</Link>.
+          Not registered yet? <Link to="/register" className="text-white hover:text-primary transition-colors underline decoration-border hover:decoration-primary underline-offset-4">Create an account</Link>.
         </div>
       </motion.div>
     </div>

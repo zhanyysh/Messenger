@@ -146,7 +146,7 @@ export default function UserSearch({
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">{user.full_name || "Anonymous Operative"}</p>
+                          <p className="text-sm font-medium text-white">{user.full_name || user.email || "Anonymous User"}</p>
                           <p className="text-xs text-textMuted">{user.email}</p>
                         </div>
                       </div>
@@ -162,7 +162,7 @@ export default function UserSearch({
               </div>
             ) : !loading && query.length > 0 ? (
               <div className="p-8 text-center">
-                <p className="text-sm text-textMuted">No operatives found matching "{query}"</p>
+                <p className="text-sm text-textMuted">No user found matching "{query}"</p>
               </div>
             ) : null}
           </div>

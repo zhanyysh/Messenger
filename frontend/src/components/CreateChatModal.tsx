@@ -139,8 +139,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
       <div className="glass-panel w-full max-w-lg relative z-10 overflow-hidden animate-in fade-in zoom-in slide-in-from-bottom-4 duration-300">
         <div className="p-6 border-b border-border/50 flex justify-between items-center bg-black/20">
           <div>
-            <h2 className="text-xl font-display font-bold text-white tracking-tight">Establish New Line</h2>
-            <p className="text-xs text-textMuted uppercase tracking-widest mt-1">Secure Protocol Initialization</p>
+            <h2 className="text-xl font-display font-bold text-white tracking-tight">Create New Chat</h2>
           </div>
           <button onClick={onClose} className="text-textMuted hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -162,8 +161,8 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
             >
               <MessageSquare className="w-5 h-5" />
               <div>
-                <p className="text-sm font-bold">1:1 Direct</p>
-                <p className="text-[10px] opacity-60">Point-to-Point</p>
+                <p className="text-sm font-bold">Private Chat</p>
+                <p className="text-[10px] opacity-60">1:1 Direct Message</p>
               </div>
             </button>
             <button
@@ -178,8 +177,8 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
             >
               <Users className="w-5 h-5" />
               <div>
-                <p className="text-sm font-bold">Multi-Node</p>
-                <p className="text-[10px] opacity-60">Encrypted Broadcast</p>
+                <p className="text-sm font-bold">Group Chat</p>
+                <p className="text-[10px] opacity-60">Multi-User Conversation</p>
               </div>
             </button>
           </div>
@@ -297,7 +296,7 @@ export default function CreateChatModal({ isOpen, onClose, onChatCreated }: Crea
               ) : (
                 <>
                   <Shield className="w-5 h-5" />
-                  INITIALIZE PROTOCOL
+                  Create Chat
                 </>
               )}
             </button>

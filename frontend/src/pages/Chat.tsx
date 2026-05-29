@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X, Settings2, Upload, Image as ImageIcon } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X, Upload, Image as ImageIcon, MoreHorizontal } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiUrl, resolveApiUrl, wsUrl } from '../lib/api';
@@ -928,7 +928,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
           <div className="p-6 border-b border-border/50 flex justify-between items-center bg-black/20">
             <div>
               <h1 className="text-2xl font-display font-bold text-gradient tracking-tighter">Wazzup</h1>
-              <p className="text-[10px] text-textMuted uppercase tracking-widest mt-1">Node: {user?.username || user?.full_name || user?.email}</p>
+              <p className="text-[10px] text-textMuted uppercase tracking-widest mt-1">User: {user?.username || user?.full_name || user?.email}</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -955,7 +955,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
           <div className="p-4 border-b border-border/50">
             <button onClick={() => setIsCreateModalOpen(true)} className="w-full flex items-center justify-center gap-2 bg-surface hover:bg-white/5 border border-border rounded-xl p-3 text-sm text-white transition-all">
               <Plus className="w-4 h-4 text-primary" />
-              New Secure Line
+              Find friend
             </button>
           </div>
 
@@ -1091,11 +1091,10 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                   {activeChat.type === 'group' && (
                     <button 
                       onClick={() => setShowGroupSettingsModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
+                      className="flex items-center justify-center w-10 h-10 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl text-xs text-textMuted hover:text-primary transition-all"
                       title="Group settings"
                     >
-                      <Settings2 className="w-4 h-4" />
-                      <span>Group Settings</span>
+                      <MoreHorizontal className="w-5 h-5" />
                     </button>
                   )}
                 </div>
@@ -1560,8 +1559,8 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                   <Search className="w-8 h-8 text-textMuted animate-pulse" />
                   <div className="absolute inset-0 bg-primary/5 rounded-full filter blur-xl animate-pulse"></div>
                 </motion.div>
-                <h2 className="text-2xl font-display text-white mb-2">No active intercepts.</h2>
-                <p className="text-textMuted max-w-sm">Select a line from the sidebar or establish a secure connection using the Target Identifier to begin broadcasting.</p>
+                <h2 className="text-2xl font-display text-white mb-2">No Active Chat</h2>
+                <p className="text-textMuted max-w-sm">Select a chat from the sidebar or create a new one to begin messaging by searching for a user.</p>
             </div>
           )}
         </div>

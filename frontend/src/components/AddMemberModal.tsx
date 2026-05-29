@@ -103,8 +103,8 @@ export default function AddMemberModal({
       <div className="glass-panel w-full max-w-md relative z-10 overflow-hidden animate-in fade-in zoom-in slide-in-from-bottom-4 duration-300">
         <div className="p-6 border-b border-border/50 flex justify-between items-center bg-primary/5">
           <div>
-            <h2 className="text-xl font-display font-bold text-white tracking-tight">Expand Node</h2>
-            <p className="text-xs text-primary uppercase tracking-[0.2em] mt-1 font-semibold">Authorized Personnel Only</p>
+            <h2 className="text-xl font-display font-bold text-white tracking-tight">Add Members</h2>
+            <p className="text-xs text-primary uppercase tracking-[0.2em] mt-1 font-semibold">Authorized Users Only</p>
           </div>
           <button onClick={onClose} className="text-textMuted hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -122,7 +122,7 @@ export default function AddMemberModal({
               excludeIds={existingParticipantIds}
               placeholder="Search by identifier..."
             />
-            <p className="text-[9px] text-textMuted italic ml-1 pt-1">Note: Only non-registered operatives in this node will be displayed.</p>
+            <p className="text-[9px] text-textMuted italic ml-1 pt-1">Note: Only users not already in this chat will be displayed.</p>
           </div>
 
           {error && (

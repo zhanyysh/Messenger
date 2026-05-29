@@ -27,13 +27,13 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(websockets.router, prefix="/ws/chat", tags=["websockets"])
 
 # Mount media static files
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-app.include_router(websockets.router, prefix="/ws/chat", tags=["websockets"])
 
 
 @app.get("/")

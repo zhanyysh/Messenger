@@ -96,9 +96,9 @@ export default function Register() {
           </motion.div>
           
           <h1 className="text-4xl font-display font-bold tracking-tighter mb-3">
-            INITIALIZE <span className="text-gradient">NODE</span>
+            Sign <span className="text-gradient">Up</span>
           </h1>
-          <p className="text-textMuted font-sans text-lg tracking-wide">Join the grid syndicate.</p>
+          <p className="text-textMuted font-sans text-lg tracking-wide">Join to stay in touch with friends</p>
         </div>
 
         {error && (
@@ -109,7 +109,7 @@ export default function Register() {
 
         <form onSubmit={handleRegister} className="space-y-5">
            <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Codename (Optional)</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Full Name (Optional)</label>
             <div className="relative group">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
@@ -117,13 +117,13 @@ export default function Register() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
-                placeholder="Agent Zero"
+                placeholder="Zhanyshbek Tynybekov"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Identifier (Email)</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Email</label>
             <div className="relative group">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
@@ -132,7 +132,7 @@ export default function Register() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
-                placeholder="operative@network.local"
+                placeholder="tynybekovjanyshbek@gmail.com"
               />
             </div>
           </div>
@@ -146,13 +146,13 @@ export default function Register() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-[#0a0a0c]/50 backdrop-blur-md border border-border rounded-xl py-4 pl-12 pr-4 text-white placeholder-textMuted/30 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all font-sans shadow-inner"
-                placeholder="agent_zero"
+                placeholder="zhanyysh"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Passphrase</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-[0.2em]">Password</label>
             <div className="relative group">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-textMuted/50 transition-colors group-focus-within:text-primary" />
               <input 
@@ -171,13 +171,13 @@ export default function Register() {
             disabled={loading}
             className="w-full btn-primary relative overflow-hidden bg-white text-black flex items-center justify-center gap-2 mt-10 text-lg group tracking-wide disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
           >
-            {loading ? 'Processing...' : 'Establish Node'}
+            {loading ? 'Processing...' : 'Create Account'}
             {!loading && <UserPlus className="w-5 h-5 transition-transform group-hover:scale-110" />}
           </button>
         </form>
 
         <div className="mt-8 text-center text-sm text-textMuted tracking-wide">
-          Already registered? <Link to="/login" className="text-white hover:text-primary transition-colors underline decoration-border hover:decoration-primary underline-offset-4">Access terminal</Link>.
+          Already registered? <Link to="/login" className="text-white hover:text-primary transition-colors underline decoration-border hover:decoration-primary underline-offset-4">Sign in</Link>.
         </div>
       </motion.div>
     </div>
