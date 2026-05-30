@@ -65,6 +65,18 @@ async def get_chat(db: AsyncSession, chat_id: int) -> Optional[Chat]:
     return result.scalars().first()
 
 
+async def get_last_message(db: AsyncSession, chat_id: int) -> Optional[Message]:
+    stmt = (
+        select(Message)
+        .options(selectinload(Message.sender))
+        .filter(Message.chat_id == chat_id)
+        .order_by(Message.timestamp.desc(), Message.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def update_chat(
     db: AsyncSession,
     *,

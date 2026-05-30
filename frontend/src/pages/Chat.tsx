@@ -18,6 +18,7 @@ interface ChatParticipant {
     email: string;
     full_name: string | null;
     avatar_url: string | null;
+    last_seen?: string | null;
   };
 }
 
@@ -28,6 +29,11 @@ interface Chat {
   image_url: string | null;
   created_at: string;
   unread_count?: number;
+  last_message_content?: string | null;
+  last_message_type?: 'text' | 'image' | 'file' | 'voice' | null;
+  last_message_sender_id?: number | null;
+  last_message_sender_name?: string | null;
+  last_message_timestamp?: string | null;
   participants: ChatParticipant[];
 }
 
@@ -76,6 +82,19 @@ interface HistoryMessageApi {
   };
 }
 
+interface PresenceSnapshotMessage {
+  event: 'presence_snapshot';
+  chat_id: number;
+  online_user_ids: number[];
+}
+
+interface PresenceUpdateMessage {
+  event: 'presence_update';
+  user_id: number;
+  is_online: boolean;
+  last_seen?: string | null;
+}
+
 interface ChatDashboardProps {
   profileOpenOnLoad?: boolean;
 }
@@ -96,6 +115,8 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [showParticipantsPanel, setShowParticipantsPanel] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
+  const [onlineUsers, setOnlineUsers] = useState<Record<number, boolean>>({});
+  const [lastSeenByUserId, setLastSeenByUserId] = useState<Record<number, string | null>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -203,6 +224,88 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     }, 1200);
   };
 
+  const formatLastSeen = React.useCallback((lastSeen: string | null | undefined) => {
+    if (!lastSeen) return 'Offline';
+
+    const diffMs = Date.now() - new Date(lastSeen).getTime();
+    if (Number.isNaN(diffMs) || diffMs < 0) return 'Offline';
+
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'Last seen just now';
+    if (minutes < 60) return `Last seen ${minutes}m ago`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Last seen ${hours}h ago`;
+
+    const days = Math.floor(hours / 24);
+    return `Last seen ${days}d ago`;
+  }, []);
+
+  const getParticipantStatus = React.useCallback((participant: ChatParticipant) => {
+    if (onlineUsers[participant.user_id]) {
+      return 'Online';
+    }
+
+    return formatLastSeen(lastSeenByUserId[participant.user_id] ?? participant.user.last_seen);
+  }, [formatLastSeen, lastSeenByUserId, onlineUsers]);
+
+  const isParticipantOnline = React.useCallback((userId: number) => {
+    return Boolean(onlineUsers[userId]);
+  }, [onlineUsers]);
+
+  const formatChatPreview = React.useCallback((chat: Chat) => {
+    if (!chat.last_message_content) {
+      return 'No messages yet';
+    }
+
+    const prefix = chat.last_message_sender_id === user?.id
+      ? 'You'
+      : chat.type === 'group' && chat.last_message_sender_name
+        ? chat.last_message_sender_name
+        : null;
+
+    const body = chat.last_message_type === 'image'
+      ? 'Photo'
+      : chat.last_message_type === 'file'
+        ? 'File'
+        : chat.last_message_type === 'voice'
+          ? 'Voice message'
+          : chat.last_message_content;
+
+    return prefix ? `${prefix}: ${body}` : body;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!activeChat) {
+      setOnlineUsers({});
+      setLastSeenByUserId({});
+      return;
+    }
+
+    setOnlineUsers({});
+    setLastSeenByUserId((previous) => {
+      const next = { ...previous };
+      activeChat.participants.forEach((participant) => {
+        next[participant.user_id] = participant.user.last_seen ?? next[participant.user_id] ?? null;
+      });
+      return next;
+    });
+  }, [activeChat?.id]);
+
+  useEffect(() => {
+    if (!activeChat) return;
+
+    setLastSeenByUserId((previous) => {
+      const next = { ...previous };
+      activeChat.participants.forEach((participant) => {
+        if (!(participant.user_id in next) || next[participant.user_id] == null) {
+          next[participant.user_id] = participant.user.last_seen ?? null;
+        }
+      });
+      return next;
+    });
+  }, [activeChat?.participants]);
+
   // Initialize and refresh chats to surface unread counters across chat rooms
   useEffect(() => {
     const refreshChats = async () => {
@@ -277,6 +380,36 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.event === 'presence_snapshot') {
+          const presenceData = data as PresenceSnapshotMessage;
+          const nextOnlineUsers: Record<number, boolean> = {};
+          presenceData.online_user_ids.forEach((userId) => {
+            nextOnlineUsers[userId] = true;
+          });
+          setOnlineUsers(nextOnlineUsers);
+          return;
+        }
+
+        if (data.event === 'presence_update') {
+          const presenceUpdate = data as PresenceUpdateMessage;
+          if (presenceUpdate.user_id === user?.id) {
+            return;
+          }
+
+          setOnlineUsers((previous) => ({
+            ...previous,
+            [presenceUpdate.user_id]: presenceUpdate.is_online,
+          }));
+
+          if (!presenceUpdate.is_online) {
+            setLastSeenByUserId((previous) => ({
+              ...previous,
+              [presenceUpdate.user_id]: presenceUpdate.last_seen ?? previous[presenceUpdate.user_id] ?? null,
+            }));
+          }
+          return;
+        }
+
         if (data.event === 'typing') {
           if (data.sender_id === user?.id) return;
 
@@ -310,12 +443,44 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
         }
 
         if (data.event === 'edit_message') {
-          setMessages(prev => prev.map(m => m.id === data.id ? { ...m, content: data.content, is_edited: true } : m));
+          setMessages(prev => {
+            const next = prev.map(m => m.id === data.id ? { ...m, content: data.content, is_edited: true } : m);
+            if (next[next.length - 1]?.id === data.id) {
+              setChats(previous => previous.map((chat) => (
+                chat.id === activeChat.id
+                  ? {
+                      ...chat,
+                      last_message_content: data.content,
+                      last_message_type: 'text',
+                    }
+                  : chat
+              )));
+            }
+            return next;
+          });
           return;
         }
 
         if (data.event === 'delete_message') {
-          setMessages(prev => prev.filter(m => m.id !== data.id));
+          setMessages(prev => {
+            const next = prev.filter(m => m.id !== data.id);
+            if (prev[prev.length - 1]?.id === data.id) {
+              const lastVisibleMessage = next[next.length - 1];
+              setChats(previous => previous.map((chat) => (
+                chat.id === activeChat.id
+                  ? {
+                      ...chat,
+                      last_message_content: lastVisibleMessage?.content ?? null,
+                      last_message_type: lastVisibleMessage?.type ?? null,
+                      last_message_sender_id: lastVisibleMessage?.sender_id ?? null,
+                      last_message_sender_name: lastVisibleMessage?.sender_name ?? null,
+                      last_message_timestamp: lastVisibleMessage?.timestamp ?? null,
+                    }
+                  : chat
+              )));
+            }
+            return next;
+          });
           return;
         }
 
@@ -330,6 +495,19 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
         };
 
         setMessages(prev => [...prev, incomingMessage]);
+        setChats((previous) => previous.map((chat) => (
+          chat.id === activeChat.id
+            ? {
+                ...chat,
+                last_message_content: incomingMessage.content,
+                last_message_type: incomingMessage.type,
+                last_message_sender_id: incomingMessage.sender_id,
+                last_message_sender_name: incomingMessage.sender_name,
+                last_message_timestamp: incomingMessage.timestamp,
+                unread_count: chat.id === activeChat.id ? 0 : (chat.unread_count ?? 0) + 1,
+              }
+            : chat
+        )));
         if (data.sender_id) {
           setTypingUsers(prev => {
             if (!prev[data.sender_id]) return prev;
@@ -353,7 +531,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       socket.close();
       wsRef.current = null;
     };
-  }, [activeChat, token, authFetch, handleUnauthorized, stopTyping, user?.id]);
+  }, [activeChat?.id, token, authFetch, handleUnauthorized, stopTyping, user?.id]);
 
   // Auto-scroll
   useEffect(() => {
@@ -986,30 +1164,36 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                         : "bg-surface border-transparent hover:border-border hover:bg-white/5"
                     )}
                   >
-                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0 border", isActive ? "bg-primary/20 border-primary/50 text-primary" : "bg-black/50 border-border text-textMuted")}>
-                      {getChatAvatarUrl(chat) ? (
-                        <img
-                          src={resolveApiUrl(getChatAvatarUrl(chat) || '')}
-                          alt={getChatName(chat)}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : chat.type === 'group' ? (
-                        <Hash className="w-5 h-5" />
-                      ) : otherParticipant?.user.avatar_url ? (
-                        <img
-                          src={resolveApiUrl(otherParticipant.user.avatar_url)}
-                          alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <UserIcon className="w-5 h-5" />
+                    <div className={cn("relative w-10 h-10 shrink-0", isActive ? "text-primary" : "text-textMuted") }>
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border", isActive ? "bg-primary/20 border-primary/50 text-primary" : "bg-black/50 border-border text-textMuted") }>
+                        {getChatAvatarUrl(chat) ? (
+                          <img
+                            src={resolveApiUrl(getChatAvatarUrl(chat) || '')}
+                            alt={getChatName(chat)}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : chat.type === 'group' ? (
+                          <Hash className="w-5 h-5" />
+                        ) : otherParticipant?.user.avatar_url ? (
+                          <img
+                            src={resolveApiUrl(otherParticipant.user.avatar_url)}
+                            alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <UserIcon className="w-5 h-5" />
+                        )}
+                      </div>
+
+                      {chat.type === 'private' && otherParticipant && isParticipantOnline(otherParticipant.user_id) && (
+                        <span className="absolute -bottom-0 -right-0 h-3 w-3 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
                       )}
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <h3 className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-white")}>
                         {getChatName(chat)}
                       </h3>
-                      <p className="text-xs text-textMuted truncate">Connected securely.</p>
+                      <p className="text-xs text-textMuted truncate">{formatChatPreview(chat)}</p>
                     </div>
                     {(chat.unread_count ?? 0) > 0 && !isActive && (
                       <div className="shrink-0 min-w-6 h-6 px-1 rounded-full bg-secondary/90 text-[10px] font-bold text-black flex items-center justify-center border border-secondary shadow-[0_0_12px_rgba(249,115,22,0.45)]">
@@ -1034,33 +1218,53 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                     const otherParticipant = getOtherParticipant(activeChat);
                     const chatAvatarUrl = getChatAvatarUrl(activeChat);
                     return (
-                  <div className="w-12 h-12 bg-surface border border-border rounded-xl flex items-center justify-center text-white">
-                    {chatAvatarUrl ? (
-                      <img
-                        src={resolveApiUrl(chatAvatarUrl)}
-                        alt={getChatName(activeChat)}
-                        className="w-full h-full rounded-xl object-cover"
-                      />
-                    ) : activeChat.type === 'group' ? (
-                      <Hash className="w-6 h-6" />
-                    ) : otherParticipant?.user.avatar_url ? (
-                      <img
-                        src={resolveApiUrl(otherParticipant.user.avatar_url)}
-                        alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
-                        className="w-full h-full rounded-xl object-cover"
-                      />
-                    ) : (
-                      <UserIcon className="w-6 h-6" />
-                    )}
-                  </div>
+                      <div className="relative w-12 h-12 bg-surface border border-border rounded-xl flex items-center justify-center text-white">
+                        {chatAvatarUrl ? (
+                          <img
+                            src={resolveApiUrl(chatAvatarUrl)}
+                            alt={getChatName(activeChat)}
+                            className="w-full h-full rounded-xl object-cover"
+                          />
+                        ) : activeChat.type === 'group' ? (
+                          <Hash className="w-6 h-6" />
+                        ) : otherParticipant?.user.avatar_url ? (
+                          <img
+                            src={resolveApiUrl(otherParticipant.user.avatar_url)}
+                            alt={otherParticipant.user.full_name || otherParticipant.user.email || 'User avatar'}
+                            className="w-full h-full rounded-xl object-cover"
+                          />
+                        ) : (
+                          <UserIcon className="w-6 h-6" />
+                        )}
+                        {activeChat.type === 'private' && otherParticipant && isParticipantOnline(otherParticipant.user_id) && (
+                          <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                        )}
+                      </div>
                     );
                   })()}
                   <div>
                     <h2 className="text-xl font-display font-semibold text-white tracking-tight">{getChatName(activeChat)}</h2>
-                    <p className="text-[11px] text-textMuted uppercase tracking-wider flex items-center gap-2">
-                       <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                       Encrypted UDP Stream
-                    </p>
+                    {activeChat.type === 'private' && (() => {
+                      const otherParticipant = getOtherParticipant(activeChat);
+                      if (!otherParticipant) return null;
+
+                      const statusLabel = getParticipantStatus(otherParticipant);
+                      return (
+                        <p className="text-[11px] text-textMuted uppercase tracking-wider flex items-center gap-2">
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            onlineUsers[otherParticipant.user_id] ? "bg-primary animate-pulse" : "bg-textMuted"
+                          )} />
+                          {statusLabel}
+                        </p>
+                      );
+                    })()}
+                    {activeChat.type === 'group' && (
+                      <p className="text-[11px] text-textMuted uppercase tracking-wider flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                        Members: {activeChat.participants.length}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1188,7 +1392,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                             className={cn("flex w-full items-end gap-2", isMe ? "justify-end" : "justify-start")}
                           >
                             {!isMe && (
-                              <div className="w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
+                              <div className="relative w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
                                 {avatarUrl ? (
                                   <img
                                     src={resolveApiUrl(avatarUrl)}
@@ -1197,6 +1401,9 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                                   />
                                 ) : (
                                   <UserIcon className="w-4 h-4" />
+                                )}
+                                {isParticipantOnline(msg.sender_id) && (
+                                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
                                 )}
                               </div>
                             )}
@@ -1304,7 +1511,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                             </div>
 
                             {isMe && (
-                              <div className="w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
+                              <div className="relative w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
                                 {avatarUrl ? (
                                   <img
                                     src={resolveApiUrl(avatarUrl)}
@@ -1313,6 +1520,9 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                                   />
                                 ) : (
                                   <UserIcon className="w-4 h-4" />
+                                )}
+                                {isParticipantOnline(msg.sender_id) && (
+                                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
                                 )}
                               </div>
                             )}
@@ -1334,7 +1544,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                         <span className="text-xs font-semibold tracking-wide">
                           {typingNames.length === 1
                             ? `${typingNames[0]} is typing...`
-                            : `${typingNames.length} operatives are typing...`}
+                            : `${typingNames.length} users are typing...`}
                         </span>
                       </motion.div>
                     )}
@@ -1464,7 +1674,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                   <div className="p-4 border-b border-border/50 sticky top-0 bg-black/20">
                     <div className="flex items-center gap-2 text-sm font-semibold text-white">
                       <Users className="w-4 h-4 text-primary" />
-                      <span>Operatives ({activeChat.participants.length})</span>
+                      <span>Members ({activeChat.participants.length})</span>
                     </div>
                   </div>
                   
@@ -1485,7 +1695,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                           >
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                                <div className="relative w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                                   {participant.user.avatar_url ? (
                                     <img
                                       src={resolveApiUrl(participant.user.avatar_url)}
@@ -1497,6 +1707,9 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                                   ) : (
                                     <UserIcon className="w-4 h-4 text-textMuted" />
                                   )}
+                                  {isParticipantOnline(participant.user_id) && (
+                                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                                  )}
                                 </div>
                                 <div className="overflow-hidden flex-1">
                                   <p className="text-xs font-semibold text-white truncate">
@@ -1504,6 +1717,14 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                                   </p>
                                   {isMe && <p className="text-[10px] text-primary">You</p>}
                                   {isAdmin && !isMe && <p className="text-[10px] text-secondary">Admin</p>}
+                                  {!isMe && (
+                                    <p className={cn(
+                                      "text-[10px] mt-0.5",
+                                      onlineUsers[participant.user_id] ? "text-primary" : "text-textMuted"
+                                    )}>
+                                      {getParticipantStatus(participant)}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1729,7 +1950,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                       <Users className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">{showParticipantsPanel ? 'Hide participants' : 'Show participants'}</p>
+                      <p className="text-sm font-semibold text-white">{showParticipantsPanel ? 'Hide members' : 'Show members'}</p>
                       <p className="text-xs text-textMuted">Open or hide the members panel.</p>
                     </div>
                   </div>

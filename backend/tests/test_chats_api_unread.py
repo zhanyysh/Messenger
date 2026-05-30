@@ -78,13 +78,13 @@ async def _seed_chat_with_unread(db_session: AsyncSession):
     )
     await db_session.commit()
 
-    return user_a, chat
+    return user_a, user_b, chat
 
 
 @pytest.mark.asyncio
 async def test_read_chats_returns_unread_count(api_client, db_session: AsyncSession):
     client, current_user_holder = api_client
-    user_a, chat = await _seed_chat_with_unread(db_session)
+    user_a, _, chat = await _seed_chat_with_unread(db_session)
 
     current_user_holder["user"] = user_a
     response = await client.get("/api/v1/chats/")
@@ -102,7 +102,7 @@ async def test_read_chat_messages_marks_chat_as_read(
     api_client, db_session: AsyncSession
 ):
     client, current_user_holder = api_client
-    user_a, chat = await _seed_chat_with_unread(db_session)
+    user_a, user_b, chat = await _seed_chat_with_unread(db_session)
 
     current_user_holder["user"] = user_a
 
@@ -116,3 +116,5 @@ async def test_read_chat_messages_marks_chat_as_read(
     chat_payload = next((c for c in payload if c["id"] == chat.id), None)
     assert chat_payload is not None
     assert chat_payload["unread_count"] == 0
+    assert chat_payload["last_message_content"] == "new message"
+    assert chat_payload["last_message_sender_id"] == user_b.id

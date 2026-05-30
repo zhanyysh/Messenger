@@ -49,6 +49,17 @@ async def read_chats(
         )
         setattr(chat, "unread_count", unread_count)
 
+        last_message = await crud_chat.get_last_message(db=db, chat_id=chat.id)
+        if last_message:
+            setattr(chat, "last_message_content", last_message.content)
+            setattr(chat, "last_message_type", last_message.type.value if hasattr(last_message.type, "value") else str(last_message.type))
+            setattr(chat, "last_message_sender_id", last_message.sender_id)
+            sender_name = None
+            if last_message.sender:
+                sender_name = last_message.sender.full_name or last_message.sender.email
+            setattr(chat, "last_message_sender_name", sender_name)
+            setattr(chat, "last_message_timestamp", last_message.timestamp)
+
     return chats
 
 

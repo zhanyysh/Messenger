@@ -1,9 +1,11 @@
 import json
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.api import deps
 from app.crud import crud_chat
 from app.crud import crud_message
+from app.crud import crud_user
 from app.models.message import MessageType
 from app.schemas.message import MessageCreate
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -16,23 +18,58 @@ class ConnectionManager:
     def __init__(self):
         # Maps chat_id to active websocket connections
         self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.websocket_users: Dict[WebSocket, int] = {}
+        self.user_connection_counts: Dict[int, int] = {}
 
-    async def connect(self, websocket: WebSocket, chat_id: int):
+    async def connect(self, websocket: WebSocket, chat_id: int, user_id: int) -> bool:
         await websocket.accept()
         if chat_id not in self.active_connections:
             self.active_connections[chat_id] = []
         self.active_connections[chat_id].append(websocket)
+        self.websocket_users[websocket] = user_id
 
-    def disconnect(self, websocket: WebSocket, chat_id: int):
+        previous_count = self.user_connection_counts.get(user_id, 0)
+        self.user_connection_counts[user_id] = previous_count + 1
+        return previous_count == 0
+
+    def disconnect(self, websocket: WebSocket, chat_id: int) -> Tuple[Optional[int], bool]:
+        user_id = self.websocket_users.pop(websocket, None)
+
         if chat_id in self.active_connections:
-            self.active_connections[chat_id].remove(websocket)
+            if websocket in self.active_connections[chat_id]:
+                self.active_connections[chat_id].remove(websocket)
             if not self.active_connections[chat_id]:
                 del self.active_connections[chat_id]
+
+        if user_id is None:
+            return None, False
+
+        remaining = self.user_connection_counts.get(user_id, 0) - 1
+        if remaining > 0:
+            self.user_connection_counts[user_id] = remaining
+            return user_id, False
+
+        self.user_connection_counts.pop(user_id, None)
+        return user_id, True
 
     async def broadcast(self, message: str, chat_id: int):
         if chat_id in self.active_connections:
             for connection in self.active_connections[chat_id]:
                 await connection.send_text(message)
+
+    async def broadcast_presence(self, message: str):
+        connections: Set[WebSocket] = set()
+        for chat_connections in self.active_connections.values():
+            connections.update(chat_connections)
+
+        for connection in connections:
+            await connection.send_text(message)
+
+    def get_online_user_ids(self, user_ids: List[int]) -> List[int]:
+        return [user_id for user_id in user_ids if self.user_connection_counts.get(user_id, 0) > 0]
+
+    def is_user_online(self, user_id: int) -> bool:
+        return self.user_connection_counts.get(user_id, 0) > 0
 
 
 manager = ConnectionManager()
@@ -65,7 +102,27 @@ async def websocket_endpoint(
         await websocket.close(code=1008)
         return
 
-    await manager.connect(websocket, chat_id)
+    is_first_connection_for_user = await manager.connect(websocket, chat_id, user.id)
+
+    participant_user_ids = [participant.user_id for participant in chat.participants if participant.user_id != user.id]
+    presence_snapshot = {
+        "event": "presence_snapshot",
+        "chat_id": chat_id,
+        "online_user_ids": manager.get_online_user_ids(participant_user_ids),
+    }
+    await websocket.send_text(json.dumps(presence_snapshot))
+
+    if is_first_connection_for_user:
+        await manager.broadcast_presence(
+            json.dumps(
+                {
+                    "event": "presence_update",
+                    "user_id": user.id,
+                    "is_online": True,
+                }
+            )
+        )
+
     try:
         while True:
             data = await websocket.receive_text()
@@ -157,4 +214,18 @@ async def websocket_endpoint(
             await manager.broadcast(json.dumps(payload), chat_id)
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, chat_id)
+        pass
+    finally:
+        disconnected_user_id, is_last_connection = manager.disconnect(websocket, chat_id)
+        if disconnected_user_id is not None and is_last_connection:
+            await crud_user.touch_last_seen(db, user)
+            await manager.broadcast_presence(
+                json.dumps(
+                    {
+                        "event": "presence_update",
+                        "user_id": disconnected_user_id,
+                        "is_online": False,
+                        "last_seen": user.last_seen.isoformat() if user.last_seen else datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                    }
+                )
+            )

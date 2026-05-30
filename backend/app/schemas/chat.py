@@ -45,6 +45,11 @@ class ChatResponse(ChatBase):
     id: int
     created_at: datetime
     unread_count: int = 0
+    last_message_content: Optional[str] = None
+    last_message_type: Optional[str] = None
+    last_message_sender_id: Optional[int] = None
+    last_message_sender_name: Optional[str] = None
+    last_message_timestamp: Optional[datetime] = None
     participants: List[ChatParticipantResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

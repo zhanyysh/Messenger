@@ -113,14 +113,14 @@ export default function AddMemberModal({
 
         <form onSubmit={handleAdd} className="p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-textMuted uppercase tracking-wider ml-1">New Operatives</label>
+            <label className="text-[10px] font-bold text-textMuted uppercase tracking-wider ml-1">New Members</label>
             <UserSearch 
               onSelect={(u) => setSelectedUsers(prev => [...prev, u])}
               selectedUsers={selectedUsers}
               onRemove={(id) => setSelectedUsers(prev => prev.filter(u => u.id !== id))}
               multiSelect={true}
               excludeIds={existingParticipantIds}
-              placeholder="Search by identifier..."
+              placeholder="Search by username..."
             />
             <p className="text-[9px] text-textMuted italic ml-1 pt-1">Note: Only users not already in this chat will be displayed.</p>
           </div>
@@ -143,7 +143,7 @@ export default function AddMemberModal({
               ) : (
                 <>
                   <UserPlus className="w-5 h-5" />
-                  SYNCHRONIZE TO NODE
+                  Add to Chat
                 </>
               )}
             </button>
@@ -152,7 +152,7 @@ export default function AddMemberModal({
               onClick={onClose}
               className="w-full mt-3 text-[10px] font-bold text-textMuted uppercase tracking-widest hover:text-white transition-all py-2"
             >
-              Abort Mission
+              Cancel
             </button>
           </div>
         </form>
