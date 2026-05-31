@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # Full Cloudinary URL (e.g. cloudinary://key:secret@cloudname)
     CLOUDINARY_URL: Optional[str] = None
 
+    # Gemini settings
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

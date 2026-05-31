@@ -45,7 +45,7 @@ async def get_chat_messages(
 
 
 async def get_message(db: AsyncSession, message_id: int) -> Message:
-    stmt = select(Message).filter(Message.id == message_id)
+    stmt = select(Message).options(selectinload(Message.sender)).filter(Message.id == message_id)
     result = await db.execute(stmt)
     return result.scalars().first()
 
