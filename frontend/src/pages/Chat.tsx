@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X, Upload, Image as ImageIcon, MoreHorizontal } from 'lucide-react';
+import { Send, LogOut, Plus, MessageSquare, Hash, User as UserIcon, Loader2, Search, UserPlus, Paperclip, Mic, File as FileIcon, Play, Square, Music, Trash2, UserRoundCog, Star, Crown, Users, Edit3, X, Upload, Image as ImageIcon, MoreHorizontal, Maximize2 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiUrl, resolveApiUrl, wsUrl } from '../lib/api';
@@ -69,6 +69,13 @@ interface NotificationState {
   tone: 'success' | 'error' | 'info';
 }
 
+interface AIReplySuggestionResponse {
+  chat_id: number;
+  message_id: number;
+  suggestions: string[];
+  rationale?: string | null;
+}
+
 interface HistoryMessageApi {
   id: number;
   content: string;
@@ -97,6 +104,25 @@ interface PresenceUpdateMessage {
 
 interface ChatDashboardProps {
   profileOpenOnLoad?: boolean;
+}
+
+interface AssistantMessageTarget {
+  id: number;
+  sender_name: string;
+  content: string;
+}
+
+interface AssistantThreadMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface AssistantPopoverPosition {
+  left: number;
+  bottom: number;
+  width: number;
+  maxHeight: number;
 }
 
 export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboardProps) {
@@ -129,10 +155,19 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searching, setSearching] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+  const [assistantTarget, setAssistantTarget] = useState<AssistantMessageTarget | null>(null);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
+  const [assistantMessages, setAssistantMessages] = useState<AssistantThreadMessage[]>([]);
+  const [assistantDraft, setAssistantDraft] = useState('');
+  const [assistantPopoverPosition, setAssistantPopoverPosition] = useState<AssistantPopoverPosition | null>(null);
+  const [assistantExpanded, setAssistantExpanded] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const groupPhotoInputRef = useRef<HTMLInputElement>(null);
+  const assistantPopoverRef = useRef<HTMLDivElement>(null);
+  const assistantThreadEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -279,6 +314,13 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     if (!activeChat) {
       setOnlineUsers({});
       setLastSeenByUserId({});
+      setAssistantTarget(null);
+      setAssistantError(null);
+      setAssistantLoading(false);
+      setAssistantMessages([]);
+      setAssistantDraft('');
+      setAssistantPopoverPosition(null);
+      setAssistantExpanded(false);
       return;
     }
 
@@ -290,7 +332,44 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       });
       return next;
     });
+    setAssistantTarget(null);
+    setAssistantError(null);
+    setAssistantLoading(false);
+    setAssistantMessages([]);
+    setAssistantDraft('');
+    setAssistantPopoverPosition(null);
+    setAssistantExpanded(false);
   }, [activeChat?.id]);
+
+  useEffect(() => {
+    if (!assistantTarget) return;
+
+    const refreshAssistantPosition = () => {
+      const nextPosition = calculateAssistantPopoverPosition(assistantTarget.id);
+      if (nextPosition) {
+        setAssistantPopoverPosition(nextPosition);
+      }
+    };
+
+    refreshAssistantPosition();
+    window.addEventListener('resize', refreshAssistantPosition);
+    window.addEventListener('scroll', refreshAssistantPosition, true);
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (assistantPopoverRef.current && target && !assistantPopoverRef.current.contains(target)) {
+        closeAssistant();
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+
+    return () => {
+      window.removeEventListener('resize', refreshAssistantPosition);
+      window.removeEventListener('scroll', refreshAssistantPosition, true);
+      document.removeEventListener('pointerdown', handleOutsidePointerDown);
+    };
+  }, [assistantTarget?.id, assistantExpanded, calculateAssistantPopoverPosition, closeAssistant]);
 
   useEffect(() => {
     if (!activeChat) return;
@@ -557,7 +636,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   };
 
   const handleContextMenu = (e: React.MouseEvent, message: Message) => {
-    if (message.sender_id !== user?.id || message.type !== 'text') return;
+    if (message.type !== 'text') return;
     e.preventDefault();
     setContextMenu({
       x: e.pageX,
@@ -582,6 +661,134 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     }
     closeContextMenu();
   };
+
+  function calculateAssistantPopoverPosition(messageId: number) {
+    const messageElement = document.getElementById(`msg-${messageId}`);
+    if (!messageElement) return null;
+
+    const rect = messageElement.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const preferredWidth = assistantExpanded ? 560 : 420;
+    const width = Math.min(preferredWidth, viewportWidth - 24);
+    const centerX = rect.left + rect.width / 2;
+    const left = Math.max(
+      width / 2 + 12,
+      Math.min(viewportWidth - width / 2 - 12, centerX)
+    );
+
+    return {
+      left,
+      bottom: Math.max(12, window.innerHeight - rect.top + 12),
+      width,
+      maxHeight: Math.max(240, rect.top - 28),
+    };
+  }
+
+  async function submitAssistantPrompt(
+    target: AssistantMessageTarget,
+    promptText: string,
+    options: { showUserBubble?: boolean } = {}
+  ) {
+    const trimmedPrompt = promptText.trim();
+    if (!trimmedPrompt || !activeChat) return;
+
+    const showUserBubble = options.showUserBubble ?? true;
+    const userMessageId = Date.now();
+    const assistantMessageId = userMessageId + 1;
+
+    if (showUserBubble) {
+      setAssistantMessages((previous) => [
+        ...previous,
+        { id: userMessageId, role: 'user', content: trimmedPrompt },
+      ]);
+    }
+
+    setAssistantLoading(true);
+    setAssistantError(null);
+
+    const response = await authFetch(apiUrl('/api/v1/ai/reply-suggestion'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: activeChat.id,
+        message_id: target.id,
+        suggestion_count: 3,
+        user_prompt: trimmedPrompt,
+      }),
+    });
+
+    if (!response) {
+      setAssistantLoading(false);
+      return;
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      setAssistantError(errorData?.detail || 'Assistant is unavailable right now.');
+      setAssistantLoading(false);
+      return;
+    }
+
+    const data: AIReplySuggestionResponse & { reply?: string } = await response.json();
+    const assistantReply = data.reply || data.rationale || data.suggestions?.[0] || 'I can help refine that answer.';
+
+    setAssistantMessages((previous) => [
+      ...previous,
+      { id: assistantMessageId, role: 'assistant', content: assistantReply },
+    ]);
+    setAssistantLoading(false);
+    setAssistantDraft('');
+  }
+
+  async function openAssistantForMessage(message: Message) {
+    if (!activeChat) return;
+
+    setAssistantTarget({
+      id: message.id,
+      sender_name: message.sender_name,
+      content: message.content,
+    });
+    setAssistantMessages([]);
+    setAssistantDraft('');
+    setAssistantError(null);
+    setAssistantLoading(true);
+    setAssistantExpanded(false);
+    setAssistantPopoverPosition(calculateAssistantPopoverPosition(message.id));
+    closeContextMenu();
+
+    await submitAssistantPrompt(
+      {
+        id: message.id,
+        sender_name: message.sender_name,
+        content: message.content,
+      },
+      'Help me draft a concise answer to this message.',
+      { showUserBubble: false }
+    );
+  }
+
+  function closeAssistant() {
+    setAssistantTarget(null);
+    setAssistantError(null);
+    setAssistantLoading(false);
+    setAssistantMessages([]);
+    setAssistantDraft('');
+    setAssistantPopoverPosition(null);
+    setAssistantExpanded(false);
+  }
+
+  const handleAssistantSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assistantTarget || !assistantDraft.trim()) return;
+
+    const prompt = assistantDraft;
+    setAssistantDraft('');
+    void submitAssistantPrompt(assistantTarget, prompt);
+  };
+
+  useEffect(() => {
+    assistantThreadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [assistantMessages, assistantLoading]);
 
   const handleJumpToMessage = async (messageId: number) => {
     if (!activeChat) return;
@@ -1066,6 +1273,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   };
 
   const typingNames = Object.values(typingUsers);
+  const contextMessage = contextMenu ? messages.find((message) => message.id === contextMenu.messageId) ?? null : null;
 
   return (
     <div className="flex h-screen w-full relative overflow-hidden">
@@ -1392,18 +1600,20 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                             className={cn("flex w-full items-end gap-2", isMe ? "justify-end" : "justify-start")}
                           >
                             {!isMe && (
-                              <div className="relative w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
-                                {avatarUrl ? (
-                                  <img
-                                    src={resolveApiUrl(avatarUrl)}
-                                    alt={msg.sender_name || 'User avatar'}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <UserIcon className="w-4 h-4" />
-                                )}
+                              <div className="relative shrink-0 w-8 h-8 overflow-visible">
+                                <div className="w-8 h-8 rounded-full bg-surface border border-border overflow-hidden flex items-center justify-center text-textMuted">
+                                  {avatarUrl ? (
+                                    <img
+                                      src={resolveApiUrl(avatarUrl)}
+                                      alt={msg.sender_name || 'User avatar'}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <UserIcon className="w-4 h-4" />
+                                  )}
+                                </div>
                                 {isParticipantOnline(msg.sender_id) && (
-                                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                                  <span className="absolute z-10 -bottom-0 -right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)] pointer-events-none" />
                                 )}
                               </div>
                             )}
@@ -1511,18 +1721,20 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                             </div>
 
                             {isMe && (
-                              <div className="relative w-8 h-8 rounded-full bg-surface border border-border shrink-0 overflow-hidden flex items-center justify-center text-textMuted">
-                                {avatarUrl ? (
-                                  <img
-                                    src={resolveApiUrl(avatarUrl)}
-                                    alt={msg.sender_name || 'User avatar'}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <UserIcon className="w-4 h-4" />
-                                )}
+                              <div className="relative shrink-0 w-8 h-8 overflow-visible">
+                                <div className="w-8 h-8 rounded-full bg-surface border border-border overflow-hidden flex items-center justify-center text-textMuted">
+                                  {avatarUrl ? (
+                                    <img
+                                      src={resolveApiUrl(avatarUrl)}
+                                      alt={msg.sender_name || 'User avatar'}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <UserIcon className="w-4 h-4" />
+                                  )}
+                                </div>
                                 {isParticipantOnline(msg.sender_id) && (
-                                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                                  <span className="absolute z-10 -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)] pointer-events-none" />
                                 )}
                               </div>
                             )}
@@ -1695,20 +1907,22 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
                           >
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div className="relative w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                                  {participant.user.avatar_url ? (
-                                    <img
-                                      src={resolveApiUrl(participant.user.avatar_url)}
-                                      alt={participant.user.full_name || participant.user.email || 'User avatar'}
-                                      className="w-full h-full rounded-full object-cover"
-                                    />
-                                  ) : isAdmin ? (
-                                    <Crown className="w-4 h-4 text-primary" />
-                                  ) : (
-                                    <UserIcon className="w-4 h-4 text-textMuted" />
-                                  )}
+                                <div className="relative shrink-0 w-8 h-8 overflow-visible">
+                                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                                    {participant.user.avatar_url ? (
+                                      <img
+                                        src={resolveApiUrl(participant.user.avatar_url)}
+                                        alt={participant.user.full_name || participant.user.email || 'User avatar'}
+                                        className="w-full h-full rounded-full object-cover"
+                                      />
+                                    ) : isAdmin ? (
+                                      <Crown className="w-4 h-4 text-primary" />
+                                    ) : (
+                                      <UserIcon className="w-4 h-4 text-textMuted" />
+                                    )}
+                                  </div>
                                   {isParticipantOnline(participant.user_id) && (
-                                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                                    <span className="absolute z-10 -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a0a0c] bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)] pointer-events-none" />
                                   )}
                                 </div>
                                 <div className="overflow-hidden flex-1">
@@ -1786,6 +2000,99 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {assistantTarget && assistantPopoverPosition && (
+          <motion.div
+            ref={assistantPopoverRef}
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="fixed z-[160] rounded-3xl border border-border/70 bg-[#09090b]/95 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl overflow-hidden"
+            style={{
+              left: assistantPopoverPosition.left,
+              bottom: assistantPopoverPosition.bottom,
+              width: assistantPopoverPosition.width,
+              maxHeight: assistantPopoverPosition.maxHeight,
+              transform: 'translateX(-50%)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 bg-black/30">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-primary">Assistant</p>
+                <p className="text-xs text-textMuted truncate mt-1">
+                  Replying to {assistantTarget.sender_name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssistantExpanded((previous) => !previous)}
+                className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 transition-all"
+                title="Resize assistant window"
+              >
+                <Maximize2 className={cn("w-4 h-4 transition-transform", assistantExpanded && "rotate-90")} />
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-col" style={{ maxHeight: assistantPopoverPosition.maxHeight }}>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-border/40 bg-white/5 px-3 py-2 text-xs text-textMuted">
+                    {assistantTarget.content}
+                  </div>
+
+                  {assistantMessages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={cn(
+                        "flex w-full",
+                        message.role === 'user' ? 'justify-end' : 'justify-start'
+                      )}
+                    >
+                      {message.role === 'user' ? (
+                        <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-primary/15 px-3 py-2 text-sm text-white">
+                          {message.content}
+                        </div>
+                      ) : (
+                        <p className="max-w-full text-left text-sm leading-relaxed text-white whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                  {assistantLoading && (
+                    <div className="flex items-center gap-2 text-sm text-primary">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Thinking...</span>
+                    </div>
+                  )}
+
+                  {assistantError && (
+                    <p className="text-sm text-secondary">{assistantError}</p>
+                  )}
+
+                  <div ref={assistantThreadEndRef} />
+                </div>
+              </div>
+
+              <form onSubmit={handleAssistantSubmit} className="border-t border-white/10 bg-black/35 p-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  <input
+                    type="text"
+                    value={assistantDraft}
+                    onChange={(e) => setAssistantDraft(e.target.value)}
+                    placeholder="Ask for assist"
+                    className="w-full bg-transparent text-sm text-white placeholder:text-textMuted focus:outline-none"
+                    autoComplete="off"
+                  />
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <CreateChatModal 
         isOpen={isCreateModalOpen} 
@@ -2015,24 +2322,39 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
             style={{ top: contextMenu.y, left: contextMenu.x }}
             className="fixed z-[100] min-w-[160px] bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1.5"
           >
-            <button
-              onClick={() => {
-                const msg = messages.find(m => m.id === contextMenu.messageId);
-                if (msg) startEdit(msg);
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-primary hover:bg-white/5 transition-all text-left"
-            >
-              <Edit3 className="w-4 h-4" />
-              <span>Edit Message</span>
-            </button>
-            <div className="h-px bg-white/5 my-1 mx-1" />
-            <button
-              onClick={() => deleteMessage(contextMenu.messageId)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-secondary hover:bg-secondary/5 transition-all text-left"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete Securely</span>
-            </button>
+            {contextMessage && contextMessage.sender_id !== user?.id && (
+              <button
+                onClick={() => void openAssistantForMessage(contextMessage)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-primary hover:bg-white/5 transition-all text-left"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>How to answer?</span>
+              </button>
+            )}
+            {contextMessage && contextMessage.sender_id !== user?.id && (
+              <div className="h-px bg-white/5 my-1 mx-1" />
+            )}
+            {contextMessage && contextMessage.sender_id === user?.id && (
+              <button
+                onClick={() => startEdit(contextMessage)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-primary hover:bg-white/5 transition-all text-left"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Message</span>
+              </button>
+            )}
+            {contextMessage && contextMessage.sender_id === user?.id && (
+              <div className="h-px bg-white/5 my-1 mx-1" />
+            )}
+            {contextMessage && contextMessage.sender_id === user?.id && (
+              <button
+                onClick={() => deleteMessage(contextMenu.messageId)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-textMuted hover:text-secondary hover:bg-secondary/5 transition-all text-left"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Securely</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
