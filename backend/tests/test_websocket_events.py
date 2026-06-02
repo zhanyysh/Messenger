@@ -268,7 +268,8 @@ async def test_websocket_presence_snapshot_and_offline_event(
         and json.loads(message)["is_online"] is False
     ]
     assert offline_update
-    assert offline_update[-1]["last_seen"]
+    last_seen = datetime.fromisoformat(offline_update[-1]["last_seen"])
+    assert (datetime.now(timezone.utc).replace(tzinfo=None) - last_seen).total_seconds() < 5
 
     result = await db_session.execute(select(User).filter(User.id == joining_user.id))
     refreshed_user = result.scalars().first()

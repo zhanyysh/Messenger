@@ -230,6 +230,7 @@ async def websocket_endpoint(
             websocket, chat_id
         )
         if disconnected_user_id is not None and is_last_connection:
+            last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await crud_user.touch_last_seen(db, user)
             await manager.broadcast_presence(
                 json.dumps(
@@ -237,13 +238,7 @@ async def websocket_endpoint(
                         "event": "presence_update",
                         "user_id": disconnected_user_id,
                         "is_online": False,
-                        "last_seen": (
-                            user.last_seen.isoformat()
-                            if user.last_seen
-                            else datetime.now(timezone.utc)
-                            .replace(tzinfo=None)
-                            .isoformat()
-                        ),
+                        "last_seen": last_seen_at.isoformat(),
                     }
                 )
             )

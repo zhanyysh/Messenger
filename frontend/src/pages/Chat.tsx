@@ -240,6 +240,16 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     }, 2800);
   }, []);
 
+  const parseLastSeenTimestamp = React.useCallback((lastSeen: string | null | undefined) => {
+    if (!lastSeen) return null;
+
+    const hasTimezoneSuffix = /([zZ]|[+-]\d\d:\d\d)$/.test(lastSeen);
+    const normalizedLastSeen = hasTimezoneSuffix ? lastSeen : `${lastSeen}Z`;
+    const parsedTimestamp = new Date(normalizedLastSeen);
+
+    return Number.isNaN(parsedTimestamp.getTime()) ? null : parsedTimestamp;
+  }, []);
+
   const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNewMessage(value);
@@ -268,10 +278,11 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   };
 
   const formatLastSeen = React.useCallback((lastSeen: string | null | undefined) => {
-    if (!lastSeen) return 'Offline';
+    const parsedTimestamp = parseLastSeenTimestamp(lastSeen);
+    if (!parsedTimestamp) return 'Offline';
 
-    const diffMs = Date.now() - new Date(lastSeen).getTime();
-    if (Number.isNaN(diffMs) || diffMs < 0) return 'Offline';
+    const diffMs = Date.now() - parsedTimestamp.getTime();
+    if (diffMs < 0) return 'Offline';
 
     const minutes = Math.floor(diffMs / 60000);
     if (minutes < 1) return 'Last seen just now';
@@ -282,14 +293,14 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
 
     const days = Math.floor(hours / 24);
     return `Last seen ${days}d ago`;
-  }, []);
+  }, [parseLastSeenTimestamp]);
 
   const getParticipantStatus = React.useCallback((participant: ChatParticipant) => {
     if (onlineUsers[participant.user_id]) {
       return 'Online';
     }
 
-    return formatLastSeen(lastSeenByUserId[participant.user_id] ?? participant.user.last_seen);
+    return formatLastSeen(lastSeenByUserId[participant.user_id] ?? null);
   }, [formatLastSeen, lastSeenByUserId, onlineUsers]);
 
   const isParticipantOnline = React.useCallback((userId: number) => {
@@ -514,10 +525,16 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
             [presenceUpdate.user_id]: presenceUpdate.is_online,
           }));
 
-          if (!presenceUpdate.is_online) {
+          const nextLastSeen = presenceUpdate.last_seen;
+          if (nextLastSeen != null) {
             setLastSeenByUserId((previous) => ({
               ...previous,
-              [presenceUpdate.user_id]: presenceUpdate.last_seen ?? previous[presenceUpdate.user_id] ?? null,
+              [presenceUpdate.user_id]: nextLastSeen,
+            }));
+          } else if (!presenceUpdate.is_online) {
+            setLastSeenByUserId((previous) => ({
+              ...previous,
+              [presenceUpdate.user_id]: previous[presenceUpdate.user_id] ?? null,
             }));
           }
           return;
