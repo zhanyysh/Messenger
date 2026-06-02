@@ -179,6 +179,8 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const activeChatIdRef = useRef<number | null>(null);
+  const messagesLoadRequestRef = useRef(0);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const isTypingRef = useRef(false);
@@ -330,6 +332,10 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   }, [user?.id]);
 
   useEffect(() => {
+    activeChatIdRef.current = activeChat?.id ?? null;
+  }, [activeChat?.id]);
+
+  useEffect(() => {
     if (!activeChat) {
       setOnlineUsers({});
       setLastSeenByUserId({});
@@ -450,14 +456,6 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       if (!currentActiveChatId && withActiveReset.length > 0) {
         setLoadingHistory(true);
         setActiveChat(withActiveReset[0]);
-        return;
-      }
-
-      if (currentActiveChatId) {
-        const refreshedActive = withActiveReset.find(c => c.id === currentActiveChatId);
-        if (refreshedActive) {
-          setActiveChat(refreshedActive);
-        }
       }
     };
 
@@ -470,10 +468,15 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   useEffect(() => {
     if (!activeChat) return;
 
+    const chatId = activeChat.id;
+    const requestId = ++messagesLoadRequestRef.current;
+
     const loadMessages = async () => {
-      const res = await authFetch(apiUrl(`/api/v1/chats/${activeChat.id}/messages`));
+      const res = await authFetch(apiUrl(`/api/v1/chats/${chatId}/messages`));
       if (!res) {
-        setLoadingHistory(false);
+        if (messagesLoadRequestRef.current === requestId && activeChatIdRef.current === chatId) {
+          setLoadingHistory(false);
+        }
         return;
       }
 
@@ -485,6 +488,11 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
         sender_name: d.sender?.full_name || d.sender?.email || "Unknown",
         sender_avatar_url: d.sender?.avatar_url || null,
       }));
+
+      if (messagesLoadRequestRef.current !== requestId || activeChatIdRef.current !== chatId) {
+        return;
+      }
+
       setMessages(history);
       setLoadingHistory(false);
     };
@@ -499,9 +507,13 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       return;
     }
 
-    const socket = new WebSocket(`${wsUrl(`/ws/chat/${activeChat.id}`)}?token=${token}`);
+    const socket = new WebSocket(`${wsUrl(`/ws/chat/${chatId}`)}?token=${token}`);
     
     socket.onmessage = (event) => {
+      if (activeChatIdRef.current !== chatId) {
+        return;
+      }
+
       try {
         const data = JSON.parse(event.data);
         if (data.event === 'presence_snapshot') {
