@@ -161,12 +161,20 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
   const [assistantMessages, setAssistantMessages] = useState<AssistantThreadMessage[]>([]);
   const [assistantDraft, setAssistantDraft] = useState('');
   const [assistantPopoverPosition, setAssistantPopoverPosition] = useState<AssistantPopoverPosition | null>(null);
+  const [assistantPopoverOffset, setAssistantPopoverOffset] = useState({ x: 0, y: 0 });
   const [assistantExpanded, setAssistantExpanded] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const groupPhotoInputRef = useRef<HTMLInputElement>(null);
   const assistantPopoverRef = useRef<HTMLDivElement>(null);
+  const assistantDragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const assistantThreadEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -320,6 +328,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       setAssistantMessages([]);
       setAssistantDraft('');
       setAssistantPopoverPosition(null);
+      setAssistantPopoverOffset({ x: 0, y: 0 });
       setAssistantExpanded(false);
       return;
     }
@@ -338,6 +347,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     setAssistantMessages([]);
     setAssistantDraft('');
     setAssistantPopoverPosition(null);
+    setAssistantPopoverOffset({ x: 0, y: 0 });
     setAssistantExpanded(false);
   }, [activeChat?.id]);
 
@@ -362,12 +372,36 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
       }
     };
 
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = assistantDragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+      setAssistantPopoverOffset({
+        x: dragState.offsetX + (event.clientX - dragState.startX),
+        y: dragState.offsetY + (event.clientY - dragState.startY),
+      });
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const dragState = assistantDragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+      assistantDragStateRef.current = null;
+      document.body.style.userSelect = '';
+    };
+
     document.addEventListener('pointerdown', handleOutsidePointerDown);
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
       window.removeEventListener('resize', refreshAssistantPosition);
       window.removeEventListener('scroll', refreshAssistantPosition, true);
       document.removeEventListener('pointerdown', handleOutsidePointerDown);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [assistantTarget?.id, assistantExpanded, calculateAssistantPopoverPosition, closeAssistant]);
 
@@ -754,6 +788,7 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     setAssistantLoading(true);
     setAssistantExpanded(false);
     setAssistantPopoverPosition(calculateAssistantPopoverPosition(message.id));
+    setAssistantPopoverOffset({ x: 0, y: 0 });
     closeContextMenu();
 
     await submitAssistantPrompt(
@@ -774,8 +809,25 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
     setAssistantMessages([]);
     setAssistantDraft('');
     setAssistantPopoverPosition(null);
+    setAssistantPopoverOffset({ x: 0, y: 0 });
     setAssistantExpanded(false);
   }
+
+  const startAssistantDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!assistantPopoverPosition) return;
+
+    event.preventDefault();
+    assistantDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: assistantPopoverOffset.x,
+      offsetY: assistantPopoverOffset.y,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.style.userSelect = 'none';
+  };
 
   const handleAssistantSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2011,15 +2063,18 @@ export default function ChatDashboard({ profileOpenOnLoad = false }: ChatDashboa
             transition={{ duration: 0.18 }}
             className="fixed z-[160] rounded-3xl border border-border/70 bg-[#09090b]/95 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl overflow-hidden"
             style={{
-              left: assistantPopoverPosition.left,
-              bottom: assistantPopoverPosition.bottom,
+              left: assistantPopoverPosition.left + assistantPopoverOffset.x,
+              bottom: assistantPopoverPosition.bottom - assistantPopoverOffset.y,
               width: assistantPopoverPosition.width,
               maxHeight: assistantPopoverPosition.maxHeight,
               transform: 'translateX(-50%)',
             }}
           >
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 bg-black/30">
-              <div className="min-w-0">
+              <div
+                className="min-w-0 flex-1 cursor-grab select-none touch-none"
+                onPointerDown={startAssistantDrag}
+              >
                 <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-primary">Assistant</p>
                 <p className="text-xs text-textMuted truncate mt-1">
                   Replying to {assistantTarget.sender_name}
