@@ -270,9 +270,7 @@ async def test_websocket_presence_snapshot_and_offline_event(
     assert offline_update
     assert offline_update[-1]["last_seen"]
 
-    result = await db_session.execute(
-        select(User).filter(User.id == joining_user.id)
-    )
+    result = await db_session.execute(select(User).filter(User.id == joining_user.id))
     refreshed_user = result.scalars().first()
     assert refreshed_user is not None
     assert refreshed_user.last_seen is not None
@@ -292,7 +290,9 @@ async def test_websocket_rejects_non_participant_user(
 
     ws = FakeWebSocket(
         token="fake-token",
-        incoming_messages=[json.dumps({"event": "message", "content": "should not persist"})],
+        incoming_messages=[
+            json.dumps({"event": "message", "content": "should not persist"})
+        ],
     )
 
     await websocket_endpoint(ws, chat.id, db_session)

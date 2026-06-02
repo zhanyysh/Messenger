@@ -28,7 +28,9 @@ async def create_reply_suggestion(
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    if not any(participant.user_id == current_user.id for participant in chat.participants):
+    if not any(
+        participant.user_id == current_user.id for participant in chat.participants
+    ):
         raise HTTPException(status_code=403, detail="Not a participant of this chat")
 
     selected_message = await crud_message.get_message(db, suggestion_in.message_id)

@@ -35,7 +35,6 @@ if not os.path.exists("uploads"):
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
-
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Messenger API"}

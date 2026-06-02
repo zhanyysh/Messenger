@@ -32,7 +32,9 @@ class ConnectionManager:
         self.user_connection_counts[user_id] = previous_count + 1
         return previous_count == 0
 
-    def disconnect(self, websocket: WebSocket, chat_id: int) -> Tuple[Optional[int], bool]:
+    def disconnect(
+        self, websocket: WebSocket, chat_id: int
+    ) -> Tuple[Optional[int], bool]:
         user_id = self.websocket_users.pop(websocket, None)
 
         if chat_id in self.active_connections:
@@ -66,7 +68,11 @@ class ConnectionManager:
             await connection.send_text(message)
 
     def get_online_user_ids(self, user_ids: List[int]) -> List[int]:
-        return [user_id for user_id in user_ids if self.user_connection_counts.get(user_id, 0) > 0]
+        return [
+            user_id
+            for user_id in user_ids
+            if self.user_connection_counts.get(user_id, 0) > 0
+        ]
 
     def is_user_online(self, user_id: int) -> bool:
         return self.user_connection_counts.get(user_id, 0) > 0
@@ -98,13 +104,19 @@ async def websocket_endpoint(
         return
 
     chat = await crud_chat.get_chat(db, chat_id=chat_id)
-    if not chat or not any(participant.user_id == user.id for participant in chat.participants):
+    if not chat or not any(
+        participant.user_id == user.id for participant in chat.participants
+    ):
         await websocket.close(code=1008)
         return
 
     is_first_connection_for_user = await manager.connect(websocket, chat_id, user.id)
 
-    participant_user_ids = [participant.user_id for participant in chat.participants if participant.user_id != user.id]
+    participant_user_ids = [
+        participant.user_id
+        for participant in chat.participants
+        if participant.user_id != user.id
+    ]
     presence_snapshot = {
         "event": "presence_snapshot",
         "chat_id": chat_id,
@@ -216,7 +228,9 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         pass
     finally:
-        disconnected_user_id, is_last_connection = manager.disconnect(websocket, chat_id)
+        disconnected_user_id, is_last_connection = manager.disconnect(
+            websocket, chat_id
+        )
         if disconnected_user_id is not None and is_last_connection:
             await crud_user.touch_last_seen(db, user)
             await manager.broadcast_presence(
@@ -225,7 +239,13 @@ async def websocket_endpoint(
                         "event": "presence_update",
                         "user_id": disconnected_user_id,
                         "is_online": False,
-                        "last_seen": user.last_seen.isoformat() if user.last_seen else datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                        "last_seen": (
+                            user.last_seen.isoformat()
+                            if user.last_seen
+                            else datetime.now(timezone.utc)
+                            .replace(tzinfo=None)
+                            .isoformat()
+                        ),
                     }
                 )
             )

@@ -22,7 +22,11 @@ def configure_cloudinary():
         except Exception:
             return False
 
-    if settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET:
+    if (
+        settings.CLOUDINARY_CLOUD_NAME
+        and settings.CLOUDINARY_API_KEY
+        and settings.CLOUDINARY_API_SECRET
+    ):
         cloudinary.config(
             cloud_name=settings.CLOUDINARY_CLOUD_NAME,
             api_key=settings.CLOUDINARY_API_KEY,
@@ -42,13 +46,17 @@ async def upload_file(
     """Upload a file to Cloudinary (recommended for production) or return error if not configured."""
 
     if not configure_cloudinary():
-        raise HTTPException(status_code=500, detail="Cloudinary is not configured on the server")
+        raise HTTPException(
+            status_code=500, detail="Cloudinary is not configured on the server"
+        )
 
     # Read file content into memory (Cloud Run has memory limits; this is reasonable for images)
     try:
         contents = await file.read()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to read uploaded file: {e}"
+        )
 
     public_id = str(uuid.uuid4())
     upload_params = {
@@ -68,6 +76,10 @@ async def upload_file(
 
     url = res.get("secure_url") or res.get("url")
     if not url:
-        raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL")
+        raise HTTPException(
+            status_code=500, detail="Cloudinary did not return a file URL"
+        )
 
-    return MediaResponse(url=url, filename=file.filename, content_type=file.content_type)
+    return MediaResponse(
+        url=url, filename=file.filename, content_type=file.content_type
+    )

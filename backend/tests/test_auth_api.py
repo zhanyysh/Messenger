@@ -34,7 +34,9 @@ async def api_client(db_session: AsyncSession):
     app.dependency_overrides.clear()
 
 
-async def _create_user(db_session: AsyncSession, *, email: str, username: str, password: str) -> User:
+async def _create_user(
+    db_session: AsyncSession, *, email: str, username: str, password: str
+) -> User:
     return await crud_user.create(
         db_session,
         obj_in=UserCreate(
@@ -74,7 +76,9 @@ async def test_register_user_creates_account(api_client, db_session: AsyncSessio
 
 
 @pytest.mark.asyncio
-async def test_register_user_rejects_duplicate_email(api_client, db_session: AsyncSession):
+async def test_register_user_rejects_duplicate_email(
+    api_client, db_session: AsyncSession
+):
     client, _ = api_client
     await _create_user(
         db_session,
@@ -95,11 +99,16 @@ async def test_register_user_rejects_duplicate_email(api_client, db_session: Asy
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "The user with this email already exists in the system."
+    assert (
+        response.json()["detail"]
+        == "The user with this email already exists in the system."
+    )
 
 
 @pytest.mark.asyncio
-async def test_login_accepts_email_and_username_and_returns_token(api_client, db_session: AsyncSession):
+async def test_login_accepts_email_and_username_and_returns_token(
+    api_client, db_session: AsyncSession
+):
     client, _ = api_client
     await _create_user(
         db_session,

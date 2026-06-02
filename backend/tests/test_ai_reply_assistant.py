@@ -37,8 +37,12 @@ async def api_client(db_session: AsyncSession):
 
 
 async def _seed_chat_with_messages(db_session: AsyncSession):
-    user_a = User(email="assistant_reader@example.com", hashed_password="hash", full_name="Reader")
-    user_b = User(email="assistant_writer@example.com", hashed_password="hash", full_name="Writer")
+    user_a = User(
+        email="assistant_reader@example.com", hashed_password="hash", full_name="Reader"
+    )
+    user_b = User(
+        email="assistant_writer@example.com", hashed_password="hash", full_name="Writer"
+    )
     db_session.add_all([user_a, user_b])
     await db_session.flush()
 
@@ -65,9 +69,17 @@ async def _seed_chat_with_messages(db_session: AsyncSession):
     )
     await db_session.flush()
 
-    previous_message = Message(chat_id=chat.id, sender_id=user_a.id, content="We should reply fast")
-    target_message = Message(chat_id=chat.id, sender_id=user_b.id, content="Can you help me answer this?",)
-    next_message = Message(chat_id=chat.id, sender_id=user_a.id, content="Keep it short and polite")
+    previous_message = Message(
+        chat_id=chat.id, sender_id=user_a.id, content="We should reply fast"
+    )
+    target_message = Message(
+        chat_id=chat.id,
+        sender_id=user_b.id,
+        content="Can you help me answer this?",
+    )
+    next_message = Message(
+        chat_id=chat.id, sender_id=user_a.id, content="Keep it short and polite"
+    )
     db_session.add_all([previous_message, target_message, next_message])
     await db_session.commit()
 
@@ -75,7 +87,9 @@ async def _seed_chat_with_messages(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_create_reply_suggestion_returns_assistant_options(api_client, db_session: AsyncSession, monkeypatch):
+async def test_create_reply_suggestion_returns_assistant_options(
+    api_client, db_session: AsyncSession, monkeypatch
+):
     client, current_user_holder = api_client
     user_a, _, chat, target_message = await _seed_chat_with_messages(db_session)
 
@@ -91,11 +105,17 @@ async def test_create_reply_suggestion_returns_assistant_options(api_client, db_
             "rationale": "Short and supportive works best.",
         }
 
-    monkeypatch.setattr(ai, "generate_reply_suggestions", fake_generate_reply_suggestions)
+    monkeypatch.setattr(
+        ai, "generate_reply_suggestions", fake_generate_reply_suggestions
+    )
 
     response = await client.post(
         "/api/v1/ai/reply-suggestion",
-        json={"chat_id": chat.id, "message_id": target_message.id, "suggestion_count": 2},
+        json={
+            "chat_id": chat.id,
+            "message_id": target_message.id,
+            "suggestion_count": 2,
+        },
     )
 
     assert response.status_code == 200
@@ -112,7 +132,9 @@ async def test_create_reply_suggestion_returns_assistant_options(api_client, db_
 
 
 @pytest.mark.asyncio
-async def test_create_reply_suggestion_surfaces_provider_errors(api_client, db_session: AsyncSession, monkeypatch):
+async def test_create_reply_suggestion_surfaces_provider_errors(
+    api_client, db_session: AsyncSession, monkeypatch
+):
     client, current_user_holder = api_client
     user_a, _, chat, target_message = await _seed_chat_with_messages(db_session)
 
@@ -121,7 +143,9 @@ async def test_create_reply_suggestion_surfaces_provider_errors(api_client, db_s
     async def fake_generate_reply_suggestions(**kwargs):
         raise ai.GeminiAssistantError("Gemini is unavailable")
 
-    monkeypatch.setattr(ai, "generate_reply_suggestions", fake_generate_reply_suggestions)
+    monkeypatch.setattr(
+        ai, "generate_reply_suggestions", fake_generate_reply_suggestions
+    )
 
     response = await client.post(
         "/api/v1/ai/reply-suggestion",

@@ -47,7 +47,9 @@ async def test_upload_file_returns_public_url(api_client, monkeypatch):
     client, current_user_holder = api_client
     current_user_holder["user"] = _seed_current_user()
 
-    monkeypatch.setattr(uploads.settings, "CLOUDINARY_URL", "cloudinary://key:secret@demo")
+    monkeypatch.setattr(
+        uploads.settings, "CLOUDINARY_URL", "cloudinary://key:secret@demo"
+    )
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_CLOUD_NAME", None)
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_API_KEY", None)
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_API_SECRET", None)
@@ -61,7 +63,9 @@ async def test_upload_file_returns_public_url(api_client, monkeypatch):
 
     def fake_upload(file_obj, **kwargs):
         upload_calls.append((file_obj, kwargs))
-        return {"secure_url": "https://res.cloudinary.com/demo/image/upload/v1/file.png"}
+        return {
+            "secure_url": "https://res.cloudinary.com/demo/image/upload/v1/file.png"
+        }
 
     monkeypatch.setattr(uploads.cloudinary, "config", fake_config)
     monkeypatch.setattr(uploads.cloudinary.uploader, "upload", fake_upload)
@@ -110,7 +114,9 @@ async def test_upload_file_surfaces_cloudinary_errors(api_client, monkeypatch):
     client, current_user_holder = api_client
     current_user_holder["user"] = _seed_current_user()
 
-    monkeypatch.setattr(uploads.settings, "CLOUDINARY_URL", "cloudinary://key:secret@demo")
+    monkeypatch.setattr(
+        uploads.settings, "CLOUDINARY_URL", "cloudinary://key:secret@demo"
+    )
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_CLOUD_NAME", None)
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_API_KEY", None)
     monkeypatch.setattr(uploads.settings, "CLOUDINARY_API_SECRET", None)

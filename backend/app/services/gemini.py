@@ -37,9 +37,7 @@ def _build_prompt(
     context_lines = []
     for message in context_messages:
         prefix = "[target]" if message.get("is_current_message") else ""
-        context_lines.append(
-            f"{prefix}{message['sender_name']}: {message['content']}"
-        )
+        context_lines.append(f"{prefix}{message['sender_name']}: {message['content']}")
 
     prompt_context = (
         f"User prompt: {user_prompt}\n"
@@ -57,8 +55,7 @@ def _build_prompt(
         f"Chat: {chat_name}\n"
         f"Selected message from {selected_message_sender_name}: {selected_message_content}\n"
         f"{prompt_context}"
-        "Context:\n"
-        + "\n".join(context_lines)
+        "Context:\n" + "\n".join(context_lines)
     )
 
 
@@ -143,7 +140,9 @@ async def generate_reply_suggestions(
     if not isinstance(suggestions, list):
         raise GeminiAssistantError("Gemini suggestions payload is invalid")
 
-    normalized_suggestions = [str(item).strip() for item in suggestions if str(item).strip()]
+    normalized_suggestions = [
+        str(item).strip() for item in suggestions if str(item).strip()
+    ]
     if not normalized_suggestions:
         raise GeminiAssistantError("Gemini returned no suggestions")
 
