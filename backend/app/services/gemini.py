@@ -3,7 +3,6 @@ import re
 from typing import List, Optional
 
 import httpx
-
 from app.core.config import settings
 
 

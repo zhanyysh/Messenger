@@ -3,9 +3,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set, Tuple
 
 from app.api import deps
-from app.crud import crud_chat
-from app.crud import crud_message
-from app.crud import crud_user
+from app.crud import crud_chat, crud_message, crud_user
 from app.models.message import MessageType
 from app.schemas.message import MessageCreate
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect

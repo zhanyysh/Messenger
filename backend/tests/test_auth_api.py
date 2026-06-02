@@ -6,10 +6,10 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_runtime.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 from app.api import deps
+from app.crud import crud_user
 from app.main import app
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.crud import crud_user
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
