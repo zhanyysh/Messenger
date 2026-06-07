@@ -8,10 +8,12 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
+
 class EncryptedString(TypeDecorator):
     """
     Transparently encrypt and decrypt strings for database storage.
     """
+
     impl = Text
     cache_ok = True
 
@@ -25,11 +27,13 @@ class EncryptedString(TypeDecorator):
             return value
         return decrypt_content(value)
 
+
 class MessageType(str, enum.Enum):
     TEXT = "text"
     IMAGE = "image"
     FILE = "file"
     VOICE = "voice"
+
 
 class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
@@ -39,7 +43,9 @@ class Message(Base):
     sender_id = Column(
         Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    content = Column(EncryptedString, nullable=True)  # Automatically encrypted/decrypted
+    content = Column(
+        EncryptedString, nullable=True
+    )  # Automatically encrypted/decrypted
     type = Column(SQLEnum(MessageType), default=MessageType.TEXT, nullable=False)
     is_edited = Column(Boolean(), default=False)
     timestamp = Column(

@@ -5,11 +5,13 @@ from app.core.config import settings
 # We use a lazy initialization or a function to ensure settings are loaded
 _fernet: Fernet = None
 
+
 def get_fernet() -> Fernet:
     global _fernet
     if _fernet is None:
         _fernet = Fernet(settings.MESSAGE_ENCRYPTION_KEY.encode())
     return _fernet
+
 
 def encrypt_content(content: str) -> str:
     """
@@ -17,10 +19,11 @@ def encrypt_content(content: str) -> str:
     """
     if not content:
         return content
-    
+
     fernet = get_fernet()
     encrypted_bytes = fernet.encrypt(content.encode())
     return encrypted_bytes.decode()
+
 
 def decrypt_content(ciphertext: str) -> str:
     """
@@ -29,7 +32,7 @@ def decrypt_content(ciphertext: str) -> str:
     """
     if not ciphertext:
         return ciphertext
-    
+
     fernet = get_fernet()
     try:
         decrypted_bytes = fernet.decrypt(ciphertext.encode())

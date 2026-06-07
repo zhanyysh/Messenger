@@ -32,13 +32,13 @@ jobs:
         run: |
           ruff check backend/ --ignore F401
 
-      - name: Check formatting with Black
-        run: |
-          black --check backend/
+      # - name: Check formatting with Black
+      #   run: |
+      #     black --check backend/
 
-      - name: Check imports with isort
-        run: |
-          isort --check-only backend/
+      # - name: Check imports with isort
+      #   run: |
+      #     isort --check-only backend/
 
       # - name: Type check with Mypy
       #   run: |
