@@ -71,17 +71,32 @@ async def delete_message(db: AsyncSession, db_obj: Message) -> None:
 async def search_messages(
     db: AsyncSession, chat_id: int, query: str, limit: int = 50
 ) -> List[Message]:
-    # NOTE: Encryption breaks database-side ILIKE search.
+    """
+    Search messages within a chat.
+    Since content is encrypted in the DB, we fetch a batch and filter in Python.
+    """
+    # Fetch a batch of recent messages to search through.
+    # 2000 is a safe limit for memory and speed.
+    SEARCH_DEPTH = 2000
+    
     stmt = (
         select(Message)
         .options(selectinload(Message.sender))
         .filter(Message.chat_id == chat_id)
-        .filter(Message.content.ilike(f"%{query}%"))
         .order_by(Message.timestamp.desc())
-        .limit(limit)
+        .limit(SEARCH_DEPTH)
     )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    messages = result.scalars().all()
+    
+    # Perform case-insensitive search in Python
+    query_lower = query.lower()
+    matches = [
+        msg for msg in messages 
+        if msg.content and query_lower in msg.content.lower()
+    ]
+    
+    return matches[:limit]
 
 
 async def get_messages_around_id(
