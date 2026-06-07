@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DATABASE_URL: str
     SECRET_KEY: str
-    MESSAGE_ENCRYPTION_KEY: str
+    # Default key for development/testing only. Override in .env for production.
+    MESSAGE_ENCRYPTION_KEY: str = "OQ8-9HmhQHkuOFECIoQdvajU1CspWVkun2RvosLH-PE="
     BACKEND_CORS_ORIGINS: str = "*"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -25,7 +26,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 
 settings = Settings()
