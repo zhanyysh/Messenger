@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 
 from app.models.message import Message
 from app.schemas.message import MessageCreate
@@ -71,6 +71,7 @@ async def delete_message(db: AsyncSession, db_obj: Message) -> None:
 async def search_messages(
     db: AsyncSession, chat_id: int, query: str, limit: int = 50
 ) -> List[Message]:
+    # NOTE: Encryption breaks database-side ILIKE search.
     stmt = (
         select(Message)
         .options(selectinload(Message.sender))
